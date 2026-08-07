@@ -38,6 +38,10 @@ export const POSES = {
   'pass-far': [10430, 'far'],
   hood: [1400, 'hood'],
 
+  cave: [10180, 'chase', 0.4],
+  vents: [13400, 'chase', 0.5, 'ashfall'],
+  'marsh-mirror': [12300, 'chase', 0.28],
+
   rain: [7600, 'chase', 0.4, 'rain'],
   storm: [7600, 'chase', 0.55, 'storm'],
   'dust-storm': [5500, 'chase', 0.45, 'dust'],

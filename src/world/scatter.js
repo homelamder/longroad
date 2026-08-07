@@ -283,6 +283,17 @@ export class Scatter {
       vertexColors: true, roughness: 0.86, metalness: 0,
       side: THREE.DoubleSide,          // fronds and ferns are single planes
     });
+    // Same fix as the grass: DoubleSide negates the normal on back faces, which
+    // turns every flat-foliage plane (reeds, fronds, ferns) black from one side.
+    // Keep the authored normal both sides.
+    mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_begin>',
+        `#include <normal_fragment_begin>
+        normal = normalize( vNormal );`,
+      );
+    };
+    mat.customProgramCacheKey = () => 'scatter-upnormal';
     this.material = mat;
 
     for (const [id, make] of Object.entries(SPECIES)) {

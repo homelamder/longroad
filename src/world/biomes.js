@@ -66,8 +66,8 @@ export const BIOMES = [
     id: 'ashen', name: 'Ashen Rise', end: JOURNEY,
     relief: 150, rough: 1.7, curvy: 1.15,
     snow: 560,
-    grass: 0x554d50, grass2: 0x635a5c, rock: 0x484241, soil: 0x3b3634,
-    fog: 0x6b5f5c, fogNear: 80, fogFar: 900,
+    grass: 0x46403f, grass2: 0x534b49, rock: 0x363231, soil: 0x2f2b2a,
+    fog: 0x77675f, fogNear: 80, fogFar: 900,
     sky: 0x8a7168,
   },
 ];
