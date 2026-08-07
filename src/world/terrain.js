@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { JOURNEY, biomeAt, roadElevation, mixColor, mixField, SNOW_FADE } from './biomes.js';
-import { nearest, corridorWeight, CORRIDOR } from './road.js';
+import { nearest, corridorWeight, CORRIDOR, ROAD_LENGTH } from './road.js';
+import { VALLEY } from './valley.js';
 import { makeNoise, clamp, lerp, smoothstep } from './rng.js';
 
 export const CHUNK = 256;
@@ -19,7 +20,7 @@ const LOD_LOW = [
 ];
 
 const SKIRT = 6;                 // how far chunk edges hang down to hide LOD cracks
-const VALLEY = 950;              // terrain climbs away from the road out to here
+const RISE = 950;                // terrain climbs away from the road out to here
 const WALL_IN = 980, WALL_OUT = 1520;   // cliffs the car cannot climb, in place of walls
 
 const land = makeNoise(1);
@@ -50,16 +51,44 @@ function wildElevation(x, z, roadDist) {
   const sharp = 1 - Math.abs(fbm(ridge, x + 811, z - 407, f * 1.4, 4));
   const ridged = lerp(rolling, sharp * 2 - 1, clamp(relief / 300, 0, 0.8));
 
-  const valley = smoothstep(0, VALLEY, roadDist);
+  const valley = smoothstep(0, RISE, roadDist);
   const wall = smoothstep(WALL_IN, WALL_OUT, roadDist);
 
-  return base
+  let h = base
     + ridged * relief
     + valley * relief * 0.55
     // Scaled to the region: a flat 420 m everywhere put a snowcapped rampart around
     // an open meadow. Gentle country gets hills, mountain country gets mountains.
     + wall * (170 + relief * 1.5)
     + fbm(grain, x, z, 0.02, 2) * 2.6;
+
+  // The destination: past the end of the road the land is folded into a caldera
+  // bowl. The bowl's own profile climbs from the floor back up to road height at
+  // the rim — if it did not, the blend against outside terrain would manufacture
+  // an undrivable 80% wall exactly across the arrival line.
+  const vd = Math.hypot(x - VALLEY.x, z - VALLEY.z);
+  if (vd < VALLEY.r) {
+    const t = smoothstep(VALLEY.r, VALLEY.r * 0.55, vd);         // 1 inside the rim ring
+    const shape = smoothstep(0.15, 1.0, vd / VALLEY.r);          // 0 centre, 1 at rim
+    const bowl = lerp(VALLEY.floorY, VALLEY.endY + 6, shape)
+      + fbm(grain, x * 1.7, z * 1.7, 0.02, 2) * 2.2;
+    h = lerp(h, bowl, t);
+
+    // The arrival lane: a graded ramp from the gate down to the floor, carved along
+    // the axis the road delivers you on. The bowl's walls may be as steep as a
+    // caldera pleases — this lane is the one guaranteed way in and out.
+    const ax = x - VALLEY.endX, az = z - VALLEY.endZ;
+    const s = ax * VALLEY.dirX + az * VALLEY.dirZ;               // metres past the gate
+    if (s > -20) {
+      const lat = Math.abs(ax * -VALLEY.dirZ + az * VALLEY.dirX);
+      const lane = smoothstep(34, 12, lat);
+      if (lane > 0) {
+        const ramp = lerp(VALLEY.endY, VALLEY.floorY, smoothstep(30, 400, s));
+        h = lerp(h, ramp, lane);
+      }
+    }
+  }
+  return h;
 }
 
 // Ground height given an already-computed nearest-road result. Split out only so the
@@ -76,7 +105,11 @@ function heightFrom(r, x, z) {
   // the shelf is how wide that valley is, and it scales with how big the country is.
   const along = clamp(z, 0, JOURNEY);
   const { a, b, t } = biomeAt(along);
-  const shelf = 90 + lerp(a.relief, b.relief, t) * 0.9;
+  let shelf = 90 + lerp(a.relief, b.relief, t) * 0.9;
+  // The shelf flattens ground BESIDE tarmac. Past the road's terminus there is no
+  // tarmac — held at full width there, it pinned the valley rim at road height and
+  // squeezed the whole 74 m descent into a 60 m wall. Shrink it fast at the end.
+  if (r.along > ROAD_LENGTH - 30) shelf = CORRIDOR + 40;
   const eased = lerp(r.y, wild, smoothstep(CORRIDOR, shelf, r.dist));
 
   return w <= 0 ? eased : lerp(eased, r.y, w);

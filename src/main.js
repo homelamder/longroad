@@ -10,6 +10,8 @@ import { Weather } from './world/weather.js';
 import { Animals } from './animals/animals.js';
 import { MarshWater } from './world/water.js';
 import { Landmarks } from './world/landmarks.js';
+import { Finale } from './world/finale.js';
+import { Ending } from './game/ending.js';
 import { JOURNEY, biomeAt } from './world/biomes.js';
 import { Car, DEFAULT_CAR } from './car/physics.js';
 import { poseCar, addHeadlights } from './car/body.js';
@@ -64,6 +66,7 @@ const weather = new Weather(scene);
 const animals = new Animals(scene);
 const water = new MarshWater(scene, sky);
 const landmarks = new Landmarks(scene);
+const finale = new Finale(scene, animals);
 
 // Start in whatever the player last drove; the garage swaps bodies in place.
 const startEntry = ROSTER.find((e) => e.id === (localStorage.getItem('lr.car') || 'trailhand'))
@@ -103,6 +106,8 @@ const tasks = new TaskManager(
     animals, weather, sky, landmarks, biomeAt },
 );
 
+const ending = new Ending({ hud, sky, weather, fuel });
+
 // Station offers are edge-triggered: the task is picked once on arrival, so the
 // offer cannot reroll by the frame while you sit there.
 let offeredStation = null;
@@ -118,6 +123,7 @@ function gameLogic(dt, input) {
   if (tasks.busy) {
     if (tasks.update(dt) === 'done') {
       fuel.fill();
+      ending.taskDone();
       hud.note('tank filled — the road goes on');
     }
     return;
@@ -243,6 +249,9 @@ function frame(now) {
   animals.update(dt, focus, driving ? Math.abs(car.speed) : foot.moving * 3.2);
   water.update(dt);
   landmarks.update(dt, focus);
+  finale.update(dt, focus);
+  ending.track(dt, car, sky);
+  ending.update(car, garage);
   sky.visibility = weather.vis;
   car.weatherGrip = weather.grip;
   grass.setWind(weather.wind);
@@ -271,7 +280,7 @@ window.__game = {
   get carMesh() { return game.carMesh; },
   garage,
   chase, controls, hud, quality: QUALITY,
-  fuel, stations, tasks, foot, interact, weather, animals, water, landmarks,
+  fuel, stations, tasks, foot, interact, weather, animals, water, landmarks, finale, ending,
   elevation, pointAt, nearest, biomeAt, JOURNEY, ROAD_LENGTH, DAY_LENGTH,
   TIER_NAMES, setQuality,
   get ready() { return running; },
