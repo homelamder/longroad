@@ -12,6 +12,8 @@ import { MarshWater } from './world/water.js';
 import { Landmarks } from './world/landmarks.js';
 import { Finale } from './world/finale.js';
 import { Ending } from './game/ending.js';
+import { Save } from './game/save.js';
+import { Audio } from './audio.js';
 import { JOURNEY, biomeAt } from './world/biomes.js';
 import { Car, DEFAULT_CAR } from './car/physics.js';
 import { poseCar, addHeadlights } from './car/body.js';
@@ -88,6 +90,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyG' && !e.repeat && tasks.mode === 'drive' && !tasks.busy
     && Math.abs(car.speed) < 1.5) garage.toggle();
   if (e.code === 'Escape' && garage.open) garage.toggle(false);
+  if (e.code === 'KeyM' && !e.repeat) hud.note(audio.toggleMute() ? 'sound off' : 'sound on', 2);
 });
 const post = new Post(renderer, scene, camera, QUALITY);
 controls.onCamera = () => { if (tasks.mode === 'drive') chase.cycle(); };
@@ -107,6 +110,10 @@ const tasks = new TaskManager(
 );
 
 const ending = new Ending({ hud, sky, weather, fuel });
+const audio = new Audio();
+const save = new Save({ car, fuel, sky, stations, ending });
+const resumed = save.restore();
+if (resumed) chase.snap(car);
 
 // Station offers are edge-triggered: the task is picked once on arrival, so the
 // offer cannot reroll by the frame while you sit there.
@@ -124,6 +131,7 @@ function gameLogic(dt, input) {
     if (tasks.update(dt) === 'done') {
       fuel.fill();
       ending.taskDone();
+      audio.chime('done');
       hud.note('tank filled — the road goes on');
     }
     return;
@@ -135,6 +143,7 @@ function gameLogic(dt, input) {
     interact.set({ x: find.x, z: find.z, radius: 10, label: `take the ${find.entry.name}` });
     if (interact.update(car)) {
       garage.claim(find);
+      audio.chime('find');
       interact.clear();
     }
     return;
@@ -215,7 +224,8 @@ function frame(now) {
     bootStatus.textContent = left ? `shaping the land · ${left} left` : 'planting';
     if (!left && scatter.total > 0) {
       running = true;
-      car.placeOnRoad(40);
+      if (!resumed) car.placeOnRoad(40);
+      else hud.note(`resuming — ${(car.pos.z / 1000).toFixed(1)} km down the road`, 4);
       chase.snap(car);
       boot.classList.add('gone');
       setTimeout(() => boot.remove(), 800);
@@ -252,6 +262,8 @@ function frame(now) {
   finale.update(dt, focus);
   ending.track(dt, car, sky);
   ending.update(car, garage);
+  save.update(dt);
+  audio.update(dt, car, weather, driving);
   sky.visibility = weather.vis;
   car.weatherGrip = weather.grip;
   grass.setWind(weather.wind);
@@ -280,7 +292,7 @@ window.__game = {
   get carMesh() { return game.carMesh; },
   garage,
   chase, controls, hud, quality: QUALITY,
-  fuel, stations, tasks, foot, interact, weather, animals, water, landmarks, finale, ending,
+  fuel, stations, tasks, foot, interact, weather, animals, water, landmarks, finale, ending, save, audio,
   elevation, pointAt, nearest, biomeAt, JOURNEY, ROAD_LENGTH, DAY_LENGTH,
   TIER_NAMES, setQuality,
   get ready() { return running; },

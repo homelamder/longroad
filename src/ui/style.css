@@ -257,3 +257,29 @@ canvas { display: block; width: 100%; height: 100%; }
   transition: background 0.2s ease;
 }
 .end-continue:hover { background: rgba(242, 239, 232, 0.16); }
+
+/* --- portrait hint (touch only) -------------------------------------------- */
+.rotate-hint { display: none; }
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-hint {
+    position: fixed; inset: 0; z-index: 60;
+    display: grid; place-content: center; justify-items: center; gap: 14px;
+    background: rgba(8, 11, 14, 0.94); text-align: center; padding: 30px;
+  }
+  .rotate-hint span { font-size: 44px; animation: rot-nudge 2s ease-in-out infinite; }
+  .rotate-hint p { margin: 0; color: var(--dim); letter-spacing: 0.16em; font-size: 13px; text-transform: uppercase; }
+}
+@keyframes rot-nudge { 50% { transform: rotate(-86deg); } }
+
+/* On touch the corners belong to thumbs; the dials move to the bottom centre. */
+@media (pointer: coarse) {
+  .hud-fuel {
+    left: 50%; bottom: max(14px, env(safe-area-inset-bottom));
+    transform: translateX(calc(-50% - 70px));
+  }
+  .hud-speed {
+    right: auto; left: 50%; bottom: max(10px, env(safe-area-inset-bottom));
+    transform: translateX(calc(-50% + 105px));
+  }
+  .hud-speed b { font-size: 30px; }
+}
