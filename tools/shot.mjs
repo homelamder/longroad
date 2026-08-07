@@ -38,6 +38,13 @@ export const POSES = {
   'pass-far': [10430, 'far'],
   hood: [1400, 'hood'],
 
+  rain: [7600, 'chase', 0.4, 'rain'],
+  storm: [7600, 'chase', 0.55, 'storm'],
+  'dust-storm': [5500, 'chase', 0.45, 'dust'],
+  'mist-wood': [3300, 'chase', 0.3, 'mist'],
+  blizzard: [10430, 'chase', 0.45, 'blizzard'],
+  'ash-fall': [14200, 'chase', 0.5, 'ashfall'],
+
   dawn: [1400, 'chase', 0.255],
   noon: [1400, 'chase', 0.5],
   dusk: [3300, 'chase', 0.745],
@@ -95,6 +102,7 @@ for (const name of names) {
   await page.evaluate((p) => {
     window.__game.freezeClock(true);
     window.__game.setTime(p[2] === undefined ? 0.34 : p[2]);
+    window.__game.setWeather(p[3] || 'clear');
     window.__game.teleport(p[0]);
     window.__game.setCamera(p[1]);
   }, pose);

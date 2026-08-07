@@ -39,7 +39,8 @@ export class Car {
     this.steerAngle = 0;         // visual front-wheel angle
     this.wheelSpin = 0;
     this.onRoad = true;
-    this.surface = 1;            // 1 tarmac, ~0.55 dirt
+    this.surface = 1;            // 1 tarmac, 0 open country
+    this.weatherGrip = 1;        // rain/snow write this from outside
     this.groundNormal = new THREE.Vector3(0, 1, 0);
     this.pitch = 0;
     this.roll = 0;
@@ -121,7 +122,7 @@ export class Car {
     // thing. Losing engine power off-road would be wrong — what you actually lose is
     // traction, and what really slows you is the ground dragging at the wheels.
     const pull = 0.72 + 0.28 * this.surface;
-    const hold = 0.5 + 0.5 * this.surface;
+    const hold = (0.5 + 0.5 * this.surface) * this.weatherGrip;
     const rollNow = s.roll * (1 + 4 * (1 - this.surface));
 
     if (!this.airborne) {

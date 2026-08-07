@@ -122,6 +122,7 @@ export class Sky {
     scene.add(this.bounce);
 
     scene.fog = new THREE.Fog(0xb9d3e8, 260, 1500);
+    this.visibility = 1;              // weather writes this; 1 = clear air
     this.fogTint = new THREE.Color();
     this.gradeTint = new THREE.Color(1, 1, 1);
     this.gradeLift = new THREE.Color(0, 0, 0);
@@ -180,7 +181,7 @@ export class Sky {
     // Fog takes the sky's colour, so the horizon never shows a seam between the
     // land fading out and the sky behind it.
     this.scene.fog.color.copy(this.fogTint);
-    const range = day * 0.55 + 0.45;
+    const range = (day * 0.55 + 0.45) * this.visibility;
     this.scene.fog.near = mixField(along, 'fogNear') * range;
     this.scene.fog.far = mixField(along, 'fogFar') * range;
 
