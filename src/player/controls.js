@@ -12,6 +12,7 @@ export class Controls {
     this.tiltValue = 0;
     this.onCamera = null;
     this.onRecover = null;
+    this.onAction = null;
     this.isTouch = matchMedia('(pointer: coarse)').matches;
 
     addEventListener('keydown', (e) => {
@@ -19,6 +20,7 @@ export class Controls {
       this.keys.add(e.code);
       if (e.code === 'KeyC') this.onCamera?.();
       if (e.code === 'KeyR') this.onRecover?.();
+      if (e.code === 'KeyE') this.onAction?.();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -42,6 +44,22 @@ export class Controls {
     root.appendChild(pad);
     this.padRoot = pad;
 
+    // The action button lives outside the pads container so it shows even where the
+    // drive pads are hidden (desktop testing of touch flows) — but it is touch-only.
+    const act = document.createElement('button');
+    act.className = 'pad-action';
+    act.setAttribute('aria-label', 'Interact');
+    act.textContent = '✦';
+    act.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      act.classList.add('down');
+      this.onAction?.();
+    });
+    act.addEventListener('pointerup', () => act.classList.remove('down'));
+    act.addEventListener('contextmenu', (e) => e.preventDefault());
+    root.appendChild(act);
+    this.actionBtn = act;
+
     // Pointer capture per button gives multi-touch for free: two thumbs, two ids.
     for (const b of pad.querySelectorAll('.pad')) {
       const k = b.dataset.k;
@@ -57,6 +75,11 @@ export class Controls {
       b.addEventListener('pointerleave', off);
       b.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+  }
+
+  showAction(show) {
+    // Desktop has the E key; the floating button is for thumbs.
+    if (this.isTouch) this.actionBtn.classList.toggle('show', !!show);
   }
 
   // Tilt steering is opt-in: some players want it, some are on a bus.

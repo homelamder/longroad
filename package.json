@@ -7,7 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "test": "node test/terrain.test.mjs && node test/road.test.mjs && node test/physics.test.mjs",
+    "test": "node test/terrain.test.mjs && node test/road.test.mjs && node test/physics.test.mjs && node test/loop.test.mjs",
     "shot": "node tools/shot.mjs"
   },
   "dependencies": {

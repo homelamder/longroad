@@ -12,7 +12,12 @@ import { buildCarMesh, poseCar, addHeadlights } from './car/body.js';
 import { ChaseCamera } from './car/camera.js';
 import { Dust } from './car/dust.js';
 import { Controls } from './player/controls.js';
+import { OnFoot } from './player/onfoot.js';
 import { Hud } from './ui/hud.js';
+import { Fuel } from './game/fuel.js';
+import { Stations, STATION_RADIUS } from './game/stations.js';
+import { TaskManager, Marker, Interact } from './game/tasks/index.js';
+import { FIRST_TASKS } from './game/tasks/firstthree.js';
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -56,8 +61,75 @@ const chase = new ChaseCamera(camera);
 const controls = new Controls();
 const hud = new Hud();
 const post = new Post(renderer, scene, camera, QUALITY);
-controls.onCamera = () => chase.cycle();
-controls.onRecover = () => { car.recover(); chase.snap(car); };
+controls.onCamera = () => { if (tasks.mode === 'drive') chase.cycle(); };
+controls.onRecover = () => { if (tasks.mode === 'drive') { car.recover(); chase.snap(car); } };
+
+// --- the loop: fuel, stations, tasks ---------------------------------------
+const fuel = new Fuel();
+const foot = new OnFoot();
+scene.add(foot.mesh);
+const stations = new Stations(scene);
+const marker = new Marker(scene);
+const interact = new Interact(hud, controls);
+const tasks = new TaskManager(FIRST_TASKS, {
+  scene, car, foot, hud, marker, interact, chase, station: null,
+});
+
+// Station offers are edge-triggered: the task is picked once on arrival, so the
+// offer cannot reroll by the frame while you sit there.
+let offeredStation = null;
+
+function gameLogic(dt, input) {
+  const jerry = fuel.update(dt, car, tasks.mode === 'drive' ? input.throttle : 0);
+  if (jerry === 'jerrycan') hud.note('reserve — a jerrycan saves the day');
+  fuel.capSpeed(car);
+  hud.setFuel(fuel.fraction, fuel.jerrycans, fuel.onReserve);
+  stations.setNight(sky.daylight < 0.4);
+  marker.update(dt);
+
+  if (tasks.busy) {
+    if (tasks.update(dt) === 'done') {
+      fuel.fill();
+      hud.note('tank filled — the road goes on');
+    }
+    return;
+  }
+
+  // Not on a task: stations offer one when you pull up needing fuel.
+  const s = stations.near(car.pos);
+  if (s && Math.abs(car.speed) < 1.5) {
+    if (offeredStation !== s) {
+      offeredStation = s;
+      const task = tasks.pick(s.along, sky);
+      s.offer = task;
+    }
+    if (fuel.fraction > 0.96) {
+      hud.setPrompt(null);
+      hud.setObjective('');
+    } else {
+      interact.set({ x: s.x, z: s.z, radius: STATION_RADIUS, label: s.offer.name });
+      if (interact.update(car)) {
+        interact.clear();
+        tasks.begin(s.offer, s);
+        hud.note(s.offer.name, 3);
+      }
+    }
+  } else if (offeredStation && (!s || Math.abs(car.speed) >= 1.5)) {
+    offeredStation = null;
+    interact.clear();
+  }
+
+  if (fuel.low && Math.floor(performance.now() / 12000) !== lastLowNote) {
+    lastLowNote = Math.floor(performance.now() / 12000);
+    const next = stations.next(car.pos.z);
+    hud.note(next ? `fuel low — station in ${((next.along - car.pos.z) / 1000).toFixed(1)} km` : 'fuel low');
+  }
+  if (fuel.onReserve && Math.floor(performance.now() / 9000) !== lastLowNote) {
+    lastLowNote = Math.floor(performance.now() / 9000);
+    hud.note('reserve tank — limp to the next station');
+  }
+}
+let lastLowNote = -1;
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -110,16 +182,24 @@ function frame(now) {
   }
 
   const input = controls.update(dt);
-  acc = Math.min(acc + dt, 0.25);
-  let steps = 0;
-  while (acc >= STEP && steps < 6) { car.update(STEP, input); acc -= STEP; steps++; }
-  car.braking = input.brake > 0.05;
+  const driving = tasks.mode === 'drive';
 
-  terrain.update(car.pos.x, car.pos.z, 2);
-  scatter.update(car.pos.x, car.pos.z, 1);
-  grass.update(dt, car.pos.x, car.pos.z, 5);
-  chase.update(dt, car);
-  sky.update(dt, car.pos, camera.position);
+  if (driving) {
+    acc = Math.min(acc + dt, 0.25);
+    let steps = 0;
+    while (acc >= STEP && steps < 6) { car.update(STEP, input); acc -= STEP; steps++; }
+    car.braking = input.brake > 0.05;
+  } else {
+    foot.update(dt, input);
+  }
+  gameLogic(dt, input);
+
+  const focus = driving ? car.pos : foot.pos;
+  terrain.update(focus.x, focus.z, 2);
+  scatter.update(focus.x, focus.z, 1);
+  grass.update(dt, focus.x, focus.z, 5);
+  chase.update(dt, driving ? car : foot);
+  sky.update(dt, focus, camera.position);
 
   poseCar(carMesh, car);
   lights.update(sky.daylight < 0.55);   // on through dawn and dusk, not just full dark
@@ -143,6 +223,7 @@ requestAnimationFrame(frame);
 window.__game = {
   THREE, scene, camera, renderer, car, carMesh, terrain, scatter, grass, sky, post,
   chase, controls, hud, quality: QUALITY,
+  fuel, stations, tasks, foot, interact,
   elevation, pointAt, nearest, biomeAt, JOURNEY, ROAD_LENGTH, DAY_LENGTH,
   TIER_NAMES, setQuality,
   get ready() { return running; },

@@ -21,13 +21,16 @@ export class ChaseCamera {
     this.mode = this.mode === 'chase' ? 'hood' : this.mode === 'hood' ? 'far' : 'chase';
   }
 
+  // `car` here is anything with pos, forward() and optionally speed — the on-foot
+  // player satisfies the same contract, which is what mode 'foot' relies on.
   update(dt, car) {
     const f = car.forward(this._f);
-    const speed = Math.abs(car.speed);
+    const speed = Math.abs(car.speed || 0);
     const t = clamp(speed / 35, 0, 1);
 
     let back, up, ahead, stiff;
-    if (this.mode === 'hood') { back = -0.2; up = 1.55; ahead = 14; stiff = 22; }
+    if (this.mode === 'foot') { back = 4.4; up = 2.1; ahead = 5.5; stiff = 7; }
+    else if (this.mode === 'hood') { back = -0.2; up = 1.55; ahead = 14; stiff = 22; }
     else if (this.mode === 'far') { back = lerp(11, 15.5, t); up = lerp(5.2, 6.4, t); ahead = 16; stiff = 3.0; }
     else { back = lerp(7.2, 9.4, t); up = lerp(3.0, 3.7, t); ahead = 11; stiff = 4.2; }
 
@@ -42,7 +45,7 @@ export class ChaseCamera {
 
     this._wantLook.set(
       car.pos.x + f.x * ahead,
-      car.pos.y + 1.1,
+      car.pos.y + (this.mode === 'foot' ? 1.4 : 1.1),
       car.pos.z + f.z * ahead,
     );
 
@@ -57,7 +60,8 @@ export class ChaseCamera {
     this.camera.position.copy(this.pos);
     this.camera.lookAt(this.look);
 
-    const wantFov = this.baseFov + t * 13 + (car.airborne ? 3 : 0);
+    const wantFov = this.mode === 'foot' ? this.baseFov
+      : this.baseFov + t * 13 + (car.airborne ? 3 : 0);
     if (Math.abs(this.camera.fov - wantFov) > 0.01) {
       this.camera.fov = lerp(this.camera.fov, wantFov, 1 - Math.exp(-4 * dt));
       this.camera.updateProjectionMatrix();

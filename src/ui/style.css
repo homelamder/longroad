@@ -84,6 +84,73 @@ canvas { display: block; width: 100%; height: 100%; }
   font-size: 11px; letter-spacing: 0.1em; color: var(--dim);
 }
 
+/* --- task panel ----------------------------------------------------------- */
+.hud-task {
+  position: absolute; top: max(16px, env(safe-area-inset-top)); right: 18px;
+  display: none; text-align: right; max-width: min(300px, 44vw);
+}
+.hud-task.show { display: grid; gap: 4px; }
+.hud-task-name {
+  font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+}
+.hud-objective { font-size: 11px; letter-spacing: 0.1em; color: var(--dim); }
+
+/* --- fuel ------------------------------------------------------------------ */
+.hud-fuel {
+  position: absolute; left: 18px; bottom: max(48px, calc(env(safe-area-inset-bottom) + 34px));
+  display: flex; align-items: center; gap: 8px;
+}
+.hud-fuel b { font-size: 10px; letter-spacing: 0.24em; color: var(--dim); font-weight: 500; }
+.hud-fuel-bar {
+  width: 110px; height: 3px; border-radius: 3px; overflow: hidden;
+  background: rgba(242, 239, 232, 0.18);
+}
+.hud-fuel-bar i {
+  display: block; height: 100%; width: 100%;
+  background: var(--ink);
+  transform-origin: left center; transform: scaleX(1);
+  transition: transform 0.5s linear;
+}
+.hud-fuel.low .hud-fuel-bar i { background: #e8b04b; }
+.hud-fuel.reserve .hud-fuel-bar i { background: #d6543f; }
+.hud-fuel.reserve b { color: #d6543f; animation: fuel-pulse 1.1s ease-in-out infinite; }
+.hud-cans { font-size: 11px; font-style: normal; color: var(--dim); letter-spacing: 0.08em; }
+@keyframes fuel-pulse { 50% { opacity: 0.35; } }
+
+/* --- interact prompt ------------------------------------------------------- */
+.hud-prompt {
+  position: absolute; left: 50%; bottom: 24%;
+  transform: translateX(-50%) translateY(4px);
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 16px; border-radius: 999px;
+  border: 1px solid var(--edge); background: var(--panel);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  font-size: 12.5px; letter-spacing: 0.12em;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.hud-prompt.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.hud-prompt kbd {
+  font: 600 11px/1 'Segoe UI', system-ui, sans-serif;
+  padding: 4px 7px; border-radius: 5px;
+  border: 1px solid var(--edge); background: rgba(242, 239, 232, 0.12);
+}
+
+/* --- action pad (touch) ---------------------------------------------------- */
+.pad-action {
+  position: absolute; right: max(20px, env(safe-area-inset-right)); bottom: 214px;
+  width: 66px; height: 66px; border-radius: 50%;
+  border: 1px solid rgba(255, 217, 135, 0.55); background: rgba(255, 217, 135, 0.16);
+  color: var(--ink); font-size: 22px;
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  display: none; place-items: center;
+  pointer-events: auto;
+  transition: transform 0.09s ease;
+}
+.pad-action.show { display: grid; }
+.pad-action.down { transform: scale(0.92); }
+
 /* --- touch pads ---------------------------------------------------------- */
 .pads { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
 .pads-hidden { display: none; }
