@@ -90,6 +90,17 @@ export class Grass {
           // visible boundary — without this it ends in a hard ring around the car.
           transformed.y *= 1.0 - smoothstep(uFade * 0.68, uFade, distance(cameraPosition, wpos));`);
     };
+    // Undo three's back-face normal flip. The tuft bakes an up normal so blades
+    // light like the ground they grow from — but with DoubleSide, back faces get
+    // the normal negated to point DOWN, and half of every crossed tuft goes black.
+    mat.onBeforeCompile = ((prev) => (shader) => {
+      prev(shader);
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_begin>',
+        `#include <normal_fragment_begin>
+        normal = normalize( vNormal );`,
+      );
+    })(mat.onBeforeCompile);
     mat.customProgramCacheKey = () => 'grass-sway';
 
     const mesh = new THREE.InstancedMesh(tuftGeometry(), mat, this.cap);

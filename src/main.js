@@ -7,6 +7,7 @@ import { Grass } from './world/grass.js';
 import { Sky, DAY_LENGTH } from './world/sky.js';
 import { Post } from './world/post.js';
 import { Weather } from './world/weather.js';
+import { Animals } from './animals/animals.js';
 import { JOURNEY, biomeAt } from './world/biomes.js';
 import { Car, DEFAULT_CAR } from './car/physics.js';
 import { buildCarMesh, poseCar, addHeadlights } from './car/body.js';
@@ -52,6 +53,7 @@ scene.add(grass.mesh);
 scene.add(buildRoadMesh());
 
 const weather = new Weather(scene);
+const animals = new Animals(scene);
 
 const car = new Car(DEFAULT_CAR);
 car.placeOnRoad(40);
@@ -204,6 +206,7 @@ function frame(now) {
   chase.update(dt, driving ? car : foot);
   sky.update(dt, focus, camera.position);
   weather.update(dt, camera.position, focus.z);
+  animals.update(dt, focus, driving ? Math.abs(car.speed) : foot.moving * 3.2);
   sky.visibility = weather.vis;
   car.weatherGrip = weather.grip;
   grass.setWind(weather.wind);
@@ -230,7 +233,7 @@ requestAnimationFrame(frame);
 window.__game = {
   THREE, scene, camera, renderer, car, carMesh, terrain, scatter, grass, sky, post,
   chase, controls, hud, quality: QUALITY,
-  fuel, stations, tasks, foot, interact, weather,
+  fuel, stations, tasks, foot, interact, weather, animals,
   elevation, pointAt, nearest, biomeAt, JOURNEY, ROAD_LENGTH, DAY_LENGTH,
   TIER_NAMES, setQuality,
   get ready() { return running; },
