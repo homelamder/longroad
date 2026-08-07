@@ -1,0 +1,109 @@
+:root {
+  --ink: #f2efe8;
+  --dim: rgba(242, 239, 232, 0.62);
+  --panel: rgba(12, 16, 20, 0.44);
+  --edge: rgba(242, 239, 232, 0.16);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: #0a0d10; color: var(--ink);
+  font: 400 15px/1.4 'Segoe UI', system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+canvas { display: block; width: 100%; height: 100%; }
+
+/* --- loading ------------------------------------------------------------- */
+.boot {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-content: center; justify-items: center; gap: 18px;
+  background: radial-gradient(120% 90% at 50% 30%, #16212a 0%, #080b0e 70%);
+  transition: opacity 0.7s ease;
+}
+.boot h1 {
+  margin: 0; font-size: clamp(30px, 7vw, 58px); font-weight: 200;
+  letter-spacing: 0.34em; text-transform: uppercase; text-indent: 0.34em;
+}
+.boot p { margin: 0; color: var(--dim); letter-spacing: 0.18em; font-size: 12px; text-transform: uppercase; }
+.boot.gone { opacity: 0; pointer-events: none; }
+
+/* --- hud ----------------------------------------------------------------- */
+.hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+.hud-region {
+  position: absolute; top: max(16px, env(safe-area-inset-top)); left: 18px;
+  display: grid; gap: 6px; width: min(280px, 46vw);
+}
+.hud-region-name {
+  font-size: 13px; letter-spacing: 0.26em; text-transform: uppercase;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+}
+.hud-progress {
+  height: 2px; background: rgba(242, 239, 232, 0.2); border-radius: 2px; overflow: hidden;
+}
+/* scaleX rather than width: the bar updates continuously while driving, and a
+   composited transform keeps it off the layout path entirely. */
+.hud-progress i {
+  display: block; height: 100%; width: 100%; background: var(--ink);
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform 0.4s linear;
+}
+.hud-meta {
+  display: flex; justify-content: space-between; gap: 12px;
+  font-size: 11px; letter-spacing: 0.14em; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-note {
+  position: absolute; left: 50%; top: 15%;
+  transform: translate(-50%, -6px);
+  padding: 9px 18px; border-radius: 999px;
+  border: 1px solid var(--edge); background: var(--panel);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+  opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.hud-note.show { opacity: 1; transform: translate(-50%, 0); }
+
+.hud-speed {
+  position: absolute; right: 22px; bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex; align-items: baseline; gap: 6px;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.75);
+}
+.hud-speed b { font-size: 46px; font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1; }
+.hud-speed span { font-size: 11px; letter-spacing: 0.2em; color: var(--dim); text-transform: uppercase; }
+
+.hud-hint {
+  position: absolute; left: 18px; bottom: 16px;
+  font-size: 11px; letter-spacing: 0.1em; color: var(--dim);
+}
+
+/* --- touch pads ---------------------------------------------------------- */
+.pads { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+.pads-hidden { display: none; }
+.pad-cluster { position: absolute; bottom: max(22px, env(safe-area-inset-bottom)); display: flex; gap: 14px; }
+.pad-steer { left: max(20px, env(safe-area-inset-left)); }
+.pad-drive { right: max(20px, env(safe-area-inset-right)); flex-direction: column-reverse; }
+
+.pad {
+  pointer-events: auto;
+  width: 78px; height: 78px; border-radius: 50%;
+  border: 1px solid var(--edge); background: var(--panel);
+  color: var(--ink); font-size: 26px; line-height: 1;
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  display: grid; place-items: center;
+  transition: transform 0.09s ease, background 0.09s ease;
+}
+.pad.down { background: rgba(242, 239, 232, 0.26); transform: scale(0.93); }
+.pad-gas { width: 92px; height: 92px; }
+
+@media (max-height: 430px) {
+  .pad { width: 62px; height: 62px; font-size: 21px; }
+  .pad-gas { width: 74px; height: 74px; }
+}
