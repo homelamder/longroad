@@ -22,6 +22,9 @@ import { Fuel } from './game/fuel.js';
 import { Stations, STATION_RADIUS } from './game/stations.js';
 import { TaskManager, Marker, Interact } from './game/tasks/index.js';
 import { FIRST_TASKS } from './game/tasks/firstthree.js';
+import { CREATURE_TASKS } from './game/tasks/creatures.js';
+import { DRIVING_TASKS } from './game/tasks/driving.js';
+import { SURVIVAL_TASKS } from './game/tasks/survival.js';
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -80,9 +83,11 @@ scene.add(foot.mesh);
 const stations = new Stations(scene);
 const marker = new Marker(scene);
 const interact = new Interact(hud, controls);
-const tasks = new TaskManager(FIRST_TASKS, {
-  scene, car, foot, hud, marker, interact, chase, station: null,
-});
+const tasks = new TaskManager(
+  [...FIRST_TASKS, ...CREATURE_TASKS, ...DRIVING_TASKS, ...SURVIVAL_TASKS],
+  { scene, car, foot, hud, marker, interact, chase, station: null,
+    animals, weather, sky, landmarks, biomeAt },
+);
 
 // Station offers are edge-triggered: the task is picked once on arrival, so the
 // offer cannot reroll by the frame while you sit there.

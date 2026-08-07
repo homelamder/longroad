@@ -56,6 +56,7 @@ export class TaskManager {
   constructor(registry, ctx) {
     this.registry = registry;
     this.ctx = ctx;                       // shared context handed to every task
+    this.ctx.mgr = this;                  // tasks may switch drive/foot mid-task
     this.active = null;
     this.mode = 'drive';                  // 'drive' | 'foot'
     this.offer = null;                    // station currently offering a task

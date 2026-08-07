@@ -122,6 +122,7 @@ export class Animals {
   constructor(scene) {
     this.meshes = {};
     this.herds = new Map();        // siteKey -> herd
+    this.tasked = [];              // herds owned by an active task
     for (const [id, spec] of Object.entries(SPECIES)) {
       const m = new THREE.InstancedMesh(spec.geo(), new THREE.MeshStandardMaterial({
         vertexColors: true, roughness: 0.9, metalness: 0,
@@ -174,6 +175,22 @@ export class Animals {
     return { i, species, x, z, along };
   }
 
+  // A herd owned by a task: placed exactly, exempt from range retirement, and
+  // released by the task's cleanup. Rendering rides the same instanced meshes.
+  spawnAt(species, x, z, n) {
+    const site = { i: -1 - this.tasked.length, species, x, z, along: z };
+    const herd = this.spawn(site);
+    while (herd.animals.length > n) herd.animals.pop();
+    while (herd.animals.length < n) herd.animals.push({ ...herd.animals[0] });
+    this.tasked.push(herd);
+    return herd;
+  }
+
+  release(herd) {
+    const i = this.tasked.indexOf(herd);
+    if (i >= 0) this.tasked.splice(i, 1);
+  }
+
   update(dt, playerPos, playerSpeed) {
     const centerI = Math.round(playerPos.z / SITE_SPACING);
     const span = Math.ceil(ACTIVE_RANGE / SITE_SPACING);
@@ -196,11 +213,12 @@ export class Animals {
     for (const herd of this.herds.values()) {
       if (herd) this.behave(herd, dt, playerPos, playerSpeed);
     }
+    for (const herd of this.tasked) this.behave(herd, dt, playerPos, playerSpeed);
 
     // Write instances.
     const counts = {};
     for (const id in this.meshes) counts[id] = 0;
-    for (const herd of this.herds.values()) {
+    for (const herd of [...this.herds.values(), ...this.tasked]) {
       if (!herd) continue;
       const mesh = this.meshes[herd.species];
       for (const a of herd.animals) {
@@ -247,13 +265,31 @@ export class Animals {
       a.t -= dt;
       a.phase += dt * 8;
 
+      // Escort: a task points the herd somewhere (usually at the player's slow car)
+      // and the animals walk to it, overriding wander but never overriding flee.
+      if (herd.escort && a.state !== 'flee') {
+        const ex = herd.escort.x - a.x, ez = herd.escort.z - a.z;
+        const ed = Math.hypot(ex, ez);
+        if (ed > (herd.escort.keep || 7)) {
+          a.yaw = Math.atan2(ex / ed, ez / ed);
+          // Escorted animals may cross the tarmac — a shepherd walks sheep over a
+          // road. Without this, any stray on the far side deadlocks at the verge:
+          // escort re-aims it at home every frame, road-avoidance veers it away.
+          this.step(a, spec.speed * 0.55, dt, true);
+          a.state = 'walk'; a.t = 1;
+          continue;
+        }
+        a.moving = false;
+        continue;
+      }
+
       const dx = a.x - playerPos.x, dz = a.z - playerPos.z;
       const d2 = dx * dx + dz * dz;
 
       // Threat: proximity scaled by how fast the player is coming in. A slow, calm
       // approach can get inside `calm` metres — tasks rely on that.
       const speedFactor = clamp(playerSpeed / 8, 0.35, 2.2);
-      const threat = spec.flee * speedFactor;
+      const threat = herd.docile ? 2.5 : spec.flee * speedFactor;
 
       if (d2 < threat * threat && a.state !== 'flee') {
         if (Math.sqrt(d2) > spec.calm || playerSpeed > 3) {
@@ -288,12 +324,13 @@ export class Animals {
     }
   }
 
-  step(a, speed, dt) {
+  step(a, speed, dt, allowRoad = false) {
     const f = Math.sin(a.yaw), g = Math.cos(a.yaw);
     const nx = a.x + f * speed * dt, nz = a.z + g * speed * dt;
     // Animals will not walk onto the tarmac — they are scenery and hazard-free by
     // design; a deer bolting under the wheels would demand a collision system.
-    if (nearest(nx, nz).dist > 8.5) {
+    // Escorted movement is exempt (see behave).
+    if (allowRoad || nearest(nx, nz).dist > 8.5) {
       a.x = nx; a.z = nz;
       a.y = elevation(a.x, a.z);
     } else {
