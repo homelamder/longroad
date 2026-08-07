@@ -12,7 +12,10 @@ import { MarshWater } from './world/water.js';
 import { Landmarks } from './world/landmarks.js';
 import { JOURNEY, biomeAt } from './world/biomes.js';
 import { Car, DEFAULT_CAR } from './car/physics.js';
-import { buildCarMesh, poseCar, addHeadlights } from './car/body.js';
+import { poseCar, addHeadlights } from './car/body.js';
+import { buildCarBody } from './car/generator.js';
+import { ROSTER, specFor } from './car/cars.js';
+import { Garage } from './car/garage.js';
 import { ChaseCamera } from './car/camera.js';
 import { Dust } from './car/dust.js';
 import { Controls } from './player/controls.js';
@@ -62,16 +65,27 @@ const animals = new Animals(scene);
 const water = new MarshWater(scene, sky);
 const landmarks = new Landmarks(scene);
 
-const car = new Car(DEFAULT_CAR);
+// Start in whatever the player last drove; the garage swaps bodies in place.
+const startEntry = ROSTER.find((e) => e.id === (localStorage.getItem('lr.car') || 'trailhand'))
+  || ROSTER[0];
+const car = new Car(specFor(startEntry));
 car.placeOnRoad(40);
-const carMesh = buildCarMesh(car.spec);
-const lights = addHeadlights(carMesh, car.spec);
-scene.add(carMesh);
+const game = { car, carMesh: null, lights: null, hud: null };
+game.carMesh = buildCarBody(car.spec);
+game.lights = addHeadlights(game.carMesh, car.spec);
+scene.add(game.carMesh);
 const dust = new Dust(scene);
 
 const chase = new ChaseCamera(camera);
 const controls = new Controls();
 const hud = new Hud();
+game.hud = hud;
+const garage = new Garage(scene, game);
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyG' && !e.repeat && tasks.mode === 'drive' && !tasks.busy
+    && Math.abs(car.speed) < 1.5) garage.toggle();
+  if (e.code === 'Escape' && garage.open) garage.toggle(false);
+});
 const post = new Post(renderer, scene, camera, QUALITY);
 controls.onCamera = () => { if (tasks.mode === 'drive') chase.cycle(); };
 controls.onRecover = () => { if (tasks.mode === 'drive') { car.recover(); chase.snap(car); } };
@@ -105,6 +119,17 @@ function gameLogic(dt, input) {
     if (tasks.update(dt) === 'done') {
       fuel.fill();
       hud.note('tank filled — the road goes on');
+    }
+    return;
+  }
+
+  // A parked car nearby? Claiming beats refuelling for the prompt slot.
+  const find = garage.nearestFind(car.pos);
+  if (find && Math.abs(car.speed) < 1.5) {
+    interact.set({ x: find.x, z: find.z, radius: 10, label: `take the ${find.entry.name}` });
+    if (interact.update(car)) {
+      garage.claim(find);
+      interact.clear();
     }
     return;
   }
@@ -222,8 +247,8 @@ function frame(now) {
   car.weatherGrip = weather.grip;
   grass.setWind(weather.wind);
 
-  poseCar(carMesh, car);
-  lights.update(sky.daylight < 0.55);   // on through dawn and dusk, not just full dark
+  poseCar(game.carMesh, car);
+  game.lights.update(sky.daylight < 0.55);   // on through dawn and dusk, not just full dark
   dust.update(dt, car);
   hud.update(car, sky);
 
@@ -242,7 +267,9 @@ requestAnimationFrame(frame);
 // through puppeteer against this object — without it there is no way to pose the
 // camera or drive input for a repeatable capture.
 window.__game = {
-  THREE, scene, camera, renderer, car, carMesh, terrain, scatter, grass, sky, post,
+  THREE, scene, camera, renderer, car, terrain, scatter, grass, sky, post,
+  get carMesh() { return game.carMesh; },
+  garage,
   chase, controls, hud, quality: QUALITY,
   fuel, stations, tasks, foot, interact, weather, animals, water, landmarks,
   elevation, pointAt, nearest, biomeAt, JOURNEY, ROAD_LENGTH, DAY_LENGTH,
@@ -269,7 +296,7 @@ window.__game = {
     scatter.update(car.pos.x, car.pos.z, 4);
     grass.update(STEP * n, car.pos.x, car.pos.z, 12);
     chase.update(0.016, car);
-    poseCar(carMesh, car);
+    poseCar(game.carMesh, car);
     dust.update(0.05, car);
   },
   setCamera(mode) { chase.mode = mode; chase.snap(car); },

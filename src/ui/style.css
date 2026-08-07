@@ -151,6 +151,61 @@ canvas { display: block; width: 100%; height: 100%; }
 .pad-action.show { display: grid; }
 .pad-action.down { transform: scale(0.92); }
 
+/* --- garage ---------------------------------------------------------------- */
+.garage {
+  position: fixed; inset: 0; z-index: 40;
+  display: grid; place-items: center;
+  background: rgba(6, 9, 12, 0.62);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.garage.show { opacity: 1; pointer-events: auto; }
+
+.garage-panel {
+  width: min(720px, 92vw); max-height: 84vh;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--edge); border-radius: 14px;
+  background: rgba(13, 18, 23, 0.92);
+  overflow: hidden;
+}
+.garage-panel header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--edge);
+}
+.garage-panel h2 {
+  margin: 0; font-size: 14px; font-weight: 400;
+  letter-spacing: 0.3em; text-transform: uppercase;
+}
+.garage-close {
+  border: 0; background: none; color: var(--dim);
+  font-size: 24px; line-height: 1; padding: 2px 8px;
+}
+.garage-close:hover { color: var(--ink); }
+
+.garage-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px; padding: 16px 20px; overflow-y: auto;
+}
+.garage-card {
+  display: grid; gap: 3px; justify-items: start; text-align: left;
+  padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--edge); background: rgba(242, 239, 232, 0.04);
+  color: var(--ink); font: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.garage-card:not(.locked):hover { background: rgba(242, 239, 232, 0.1); }
+.garage-card.current { border-color: rgba(255, 217, 135, 0.6); }
+.garage-card.locked { opacity: 0.45; }
+.garage-swatch { width: 26px; height: 10px; border-radius: 3px; margin-bottom: 3px; }
+.garage-name { font-size: 14px; letter-spacing: 0.08em; }
+.garage-class { font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+.garage-blurb { font-size: 11.5px; color: var(--dim); line-height: 1.35; }
+.garage-bars { display: flex; gap: 4px; margin-top: 5px; }
+.garage-bars i {
+  width: 34px; height: 3px; border-radius: 2px;
+  background: linear-gradient(to right, var(--ink) calc(var(--v) * 100%), rgba(242, 239, 232, 0.16) 0);
+}
+
 /* --- touch pads ---------------------------------------------------------- */
 .pads { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
 .pads-hidden { display: none; }
