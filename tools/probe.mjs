@@ -31,7 +31,7 @@ await (await page.createCDPSession()).send('Emulation.setFocusEmulationEnabled',
 page.on('pageerror', (e) => console.error('PAGEERROR', e.stack || e.message));
 page.on('console', (m) => { if (m.type() === 'error') console.error('CONSOLE', m.text()); });
 
-await page.goto('http://localhost:5190', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.goto('http://localhost:5199', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction('window.__game && window.__game.ready', { timeout: 180000 });
 await page.evaluate((a, t) => {
   window.__game.freezeClock(true);

@@ -10,7 +10,7 @@ const page = await browser.newPage();
 await page.setViewport({ width: 1100, height: 560 });
 await (await page.createCDPSession()).send('Emulation.setFocusEmulationEnabled', { enabled: true });
 page.on('pageerror', (e) => console.error('PAGEERROR', e.message));
-await page.goto('http://localhost:5190', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.goto('http://localhost:5199', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction('window.__game && window.__game.ready', { timeout: 180000 });
 await page.evaluate(() => {
   const g = window.__game;

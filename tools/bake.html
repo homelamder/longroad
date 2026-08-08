@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- Tree bakery: /tools/bake.html?p=Pine%20Large&seed=3
+     Generates an ez-tree, reports stats, and exposes the binary GLB (base64) on
+     window.__glb so a puppeteer runner can write it to public/veg/. Baked once,
+     shipped as static GLBs — the generator never runs at game time. -->
+<meta charset="utf-8">
+<body style="margin:0">
+<script type="module">
+import * as THREE from 'three';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { Tree, TreePreset } from '@dgreenheck/ez-tree';
+
+const q = new URLSearchParams(location.search);
+const preset = q.get('p') || 'Pine Large';
+const seed = parseInt(q.get('seed') || '0', 10);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(700, 520);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9db8d2);
+scene.add(new THREE.DirectionalLight(0xfff0d8, 3).translateX(30).translateY(40).translateZ(20));
+scene.add(new THREE.HemisphereLight(0xbdd4ee, 0x5a5040, 1.4));
+const cam = new THREE.PerspectiveCamera(50, 700 / 520, 0.1, 300);
+
+const tree = new Tree();
+tree.loadPreset(preset);
+tree.options.seed = seed;
+tree.generate();
+scene.add(tree);
+
+// Frame it.
+const box = new THREE.Box3().setFromObject(tree);
+const size = box.getSize(new THREE.Vector3());
+cam.position.set(size.x * 1.3 + 4, size.y * 0.55, size.z * 1.3 + 4);
+cam.lookAt(0, size.y * 0.45, 0);
+
+let tris = 0;
+tree.traverse((o) => { if (o.isMesh) tris += (o.geometry.index?.count ?? o.geometry.getAttribute('position').count) / 3; });
+
+// Textures load async; wait for them before exporting or the GLB embeds blanks.
+await new Promise((resolve) => {
+  const check = () => {
+    const maps = [];
+    tree.traverse((o) => { if (o.material?.map) maps.push(o.material.map); });
+    if (maps.every((m) => m.image && m.image.width)) resolve();
+    else setTimeout(check, 120);
+  };
+  check();
+});
+
+const glb = await new GLTFExporter().parseAsync(tree, { binary: true });
+const bytes = new Uint8Array(glb);
+let bin = '';
+const CHUNK = 0x8000;
+for (let i = 0; i < bytes.length; i += CHUNK) {
+  bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+}
+window.__glb = btoa(bin);
+window.__stats = { preset, seed, tris: Math.round(tris), size: size.toArray().map((v) => +v.toFixed(1)), bytes: bytes.length };
+window.__ready = true;
+(function loop() { requestAnimationFrame(loop); renderer.render(scene, cam); })();
+</script>

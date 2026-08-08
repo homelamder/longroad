@@ -85,7 +85,10 @@ export class Post {
     this.composer.addPass(new RenderPass(scene, camera));
 
     if (quality.bloom) {
-      this.bloom = new UnrealBloomPass(size, 0.42, 0.72, 0.86);
+      // Threshold sits ABOVE the Preetham sky's HDR range on purpose: bloom is for
+      // the sun disc, headlights and fires — not for blooming the entire sky over
+      // the frame, which reads as fog soup.
+      this.bloom = new UnrealBloomPass(size, 0.22, 0.4, 1.55);
       this.composer.addPass(this.bloom);
     }
 

@@ -18,7 +18,7 @@ const CHROME = [
 ].find(existsSync);
 if (!CHROME) throw new Error('No Chrome/Edge found — set CHROME manually in tools/shot.mjs');
 
-const URL = process.env.GAME_URL || 'http://localhost:5190';
+const URL = process.env.GAME_URL || 'http://localhost:5199';
 const OUT = 'shots';
 
 // name: [distance along the road, camera mode, time of day]

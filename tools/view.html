@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Standalone GLB inspector: /tools/view.html?m=/veg/boulder_01.glb&s=3
+     Renders the model on a neutral ground under daylight, camera auto-framed.
+     Exists so decimated assets are judged by eye before they go in the game. -->
+<meta charset="utf-8">
+<body style="margin:0">
+<script type="module">
+// Bare specifiers on purpose: vite transforms module scripts in HTML it serves,
+// so 'three' resolves exactly as it does in the app. Deep /node_modules/ URLs skip
+// that transform and their own bare imports then fail in the browser.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9db8d2);
+const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
+
+const sun = new THREE.DirectionalLight(0xfff0d8, 3);
+sun.position.set(30, 40, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -30;
+sun.shadow.camera.right = sun.shadow.camera.top = 30;
+sun.shadow.camera.updateProjectionMatrix();
+scene.add(sun, new THREE.HemisphereLight(0xbdd4ee, 0x5a5040, 1.2));
+
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(60, 32),
+  new THREE.MeshStandardMaterial({ color: 0x746b55, roughness: 1 }),
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+new GLTFLoader().load(q.get('m') || '/veg/boulder_01.glb', (g) => {
+  const root = g.scene;
+  root.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+  const s = parseFloat(q.get('s') || '1');
+  root.scale.setScalar(s);
+  scene.add(root);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const c = box.getCenter(new THREE.Vector3());
+  root.position.y -= box.min.y;                       // feet on the ground
+  const d = Math.max(size.x, size.y, size.z) * 1.4;
+  cam.position.set(c.x + d, size.y * 0.62, c.z + d * 0.8);
+  cam.lookAt(c.x, size.y * 0.45, c.z);
+  let tris = 0;
+  root.traverse((o) => { if (o.isMesh) tris += (o.geometry.index?.count || 0) / 3; });
+  window.__stats = { tris, size: size.toArray().map((v) => +v.toFixed(1)) };
+  window.__ready = true;
+});
+(function loop() { requestAnimationFrame(loop); renderer.render(scene, cam); })();
+</script>

@@ -3,6 +3,7 @@ import { JOURNEY, biomeAt, roadElevation, mixColor, mixField, SNOW_FADE } from '
 import { nearest, corridorWeight, CORRIDOR, ROAD_LENGTH } from './road.js';
 import { VALLEY } from './valley.js';
 import { makeNoise, clamp, lerp, smoothstep } from './rng.js';
+import { loadSplatTextures, makeSplatMaterial } from './splat.js';
 
 export const CHUNK = 256;
 
@@ -158,6 +159,8 @@ function buildChunk(cx, cz, seg) {
   const total = N * N + skirtCount;
   const pos = new Float32Array(total * 3);
   const col = new Float32Array(total * 3);
+  const splat = new Float32Array(total * 4);     // grass, rock, snow, soil weights
+  const arid = new Float32Array(total);          // 0 grassland, 1 sand desert
 
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
@@ -174,25 +177,49 @@ function buildChunk(cx, cz, seg) {
       const slope = Math.hypot(gx, gz);
 
       const along = clamp(z, 0, JOURNEY);
-      mixColor(along, 'grass', _c);
-      mixColor(along, 'grass2', _rock);
-      // Patchy two-tone ground so open country is not one flat colour.
-      _c.lerp(_rock, fbm(grain, x, z, 0.006, 2) * 0.5 + 0.5);
 
-      mixColor(along, 'rock', _rock);
-      _c.lerp(_rock, smoothstep(0.45, 1.25, slope));
-
-      // Verges worn to bare soil, fading out well before the corridor edge.
-      mixColor(along, 'soil', _soil);
-      _c.lerp(_soil, (1 - smoothstep(7, 26, dist[i])) * 0.75);
-
-      // Snow lies on anything high enough, but slides off the near-vertical faces —
-      // which is what gives a peak its dark rock streaks instead of a white blob.
+      // The same ground logic as ever, expressed as texture weights now: patchiness
+      // moves soil into grassland, slope brings rock, verges wear to soil, altitude
+      // lays snow that slides off near-vertical faces.
+      const patch = fbm(grain, x, z, 0.006, 2) * 0.5 + 0.5;
+      const rockW = smoothstep(0.45, 1.25, slope);
+      const vergeW = (1 - smoothstep(7, 26, dist[i])) * 0.75;
       const line = mixField(along, 'snow');
-      const snow = smoothstep(line, line + SNOW_FADE, y) * (1 - smoothstep(1.15, 2.1, slope));
-      if (snow > 0) _c.lerp(_soil.setRGB(0.93, 0.95, 0.99), snow);
+      const snowW = smoothstep(line, line + SNOW_FADE, y) * (1 - smoothstep(1.15, 2.1, slope));
 
-      col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b;
+      let g = 1, so = 0;
+      so += patch * 0.32;                          // broken ground within grassland
+      g -= so;
+      const open = Math.max(0, 1 - rockW) * Math.max(0, 1 - snowW);
+      let wG = g * open * (1 - vergeW);
+      let wSo = (so * open) * (1 - vergeW) + vergeW * (1 - snowW);
+      let wR = rockW * (1 - snowW);
+      const wS = snowW;
+      const i4 = i * 4;
+      splat[i4] = wG; splat[i4 + 1] = wR; splat[i4 + 2] = wS; splat[i4 + 3] = wSo;
+
+      // How desert this ground is: Emberfall fully, Ashen partly (dark tint does
+      // the volcanic reading), everywhere else grassy.
+      const { a: bA, b: bB, t: bT } = biomeAt(along);
+      const aridOf = (bi) => (bi.id === 'emberfall' ? 1 : bi.id === 'ashen' ? 0.85 : 0);
+      arid[i] = lerp(aridOf(bA), aridOf(bB), bT);
+
+      // Vertex colour becomes a hue tint over the photographic maps — strong enough
+      // that Duskwood stays darker and Ashen stays charcoal, weak enough that the
+      // texture provides the actual albedo detail.
+      mixColor(along, 'grass', _c);
+      mixColor(along, 'rock', _rock);
+      mixColor(along, 'soil', _soil);
+      const domRock = wR + wS > wG + wSo;
+      const base = domRock ? _rock : (wSo > wG ? _soil : _c);
+      const lum = 0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b;
+      // Normalize away brightness (the texture owns that), keep the hue.
+      const tintR = lum > 0.01 ? base.r / (lum * 2.2) : 1;
+      const tintG = lum > 0.01 ? base.g / (lum * 2.2) : 1;
+      const tintB = lum > 0.01 ? base.b / (lum * 2.2) : 1;
+      col[i * 3] = clamp(lerp(1, tintR, 0.8), 0, 1.7);
+      col[i * 3 + 1] = clamp(lerp(1, tintG, 0.8), 0, 1.7);
+      col[i * 3 + 2] = clamp(lerp(1, tintB, 0.8), 0, 1.7);
     }
   }
 
@@ -209,6 +236,8 @@ function buildChunk(cx, cz, seg) {
     pos[dst * 3 + 1] = pos[src * 3 + 1] - SKIRT;
     pos[dst * 3 + 2] = pos[src * 3 + 2];
     col[dst * 3] = col[src * 3]; col[dst * 3 + 1] = col[src * 3 + 1]; col[dst * 3 + 2] = col[src * 3 + 2];
+    for (let q = 0; q < 4; q++) splat[dst * 4 + q] = splat[src * 4 + q];
+    arid[dst] = arid[src];
   }
 
   const quads = seg * seg + 4 * seg;
@@ -235,6 +264,8 @@ function buildChunk(cx, cz, seg) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('aSplat', new THREE.BufferAttribute(splat, 4));
+  geo.setAttribute('aArid', new THREE.BufferAttribute(arid, 1));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
   geo.computeBoundingSphere();
@@ -242,14 +273,16 @@ function buildChunk(cx, cz, seg) {
 }
 
 export class Terrain {
-  constructor({ quality = 'high' } = {}) {
+  constructor({ quality = 'high', textured = false } = {}) {
     this.lods = quality === 'low' ? LOD_LOW : LOD_HIGH;
     this.radius = this.lods[this.lods.length - 1].ring;
     this.group = new THREE.Group();
     this.group.name = 'terrain';
-    this.material = new THREE.MeshStandardMaterial({
-      vertexColors: true, roughness: 0.96, metalness: 0.0,
-    });
+    // textured only in the browser: TextureLoader needs a DOM, and the node tests
+    // construct Terrain for streaming logic alone.
+    this.material = textured
+      ? makeSplatMaterial(loadSplatTextures())
+      : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0.0 });
     this.chunks = new Map();
     this.queue = [];
   }

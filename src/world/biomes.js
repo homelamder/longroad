@@ -19,7 +19,7 @@ export const BIOMES = [
     relief: 38, rough: 1.0, curvy: 0.6,
     snow: 380,
     grass: 0x6f9440, grass2: 0x8cae52, rock: 0x7d7468, soil: 0x6d5c46,
-    fog: 0xb9d3e8, fogNear: 260, fogFar: 1500,
+    fog: 0xb9d3e8, fogNear: 550, fogFar: 2800,
     sky: 0x8fc0e8,
   },
   {
@@ -27,7 +27,7 @@ export const BIOMES = [
     relief: 62, rough: 1.25, curvy: 0.85,
     snow: 430,
     grass: 0x5c7d3f, grass2: 0x496a34, rock: 0x7d766a, soil: 0x5b4c39,
-    fog: 0x9fb0a8, fogNear: 120, fogFar: 900,
+    fog: 0x9fb0a8, fogNear: 320, fogFar: 1700,
     sky: 0x9db6c4,
   },
   {
@@ -35,7 +35,7 @@ export const BIOMES = [
     relief: 130, rough: 1.35, curvy: 1.0,
     snow: 2000,
     grass: 0x9c7c4e, grass2: 0xb08b58, rock: 0xa2573a, soil: 0xc0895c,
-    fog: 0xe0b489, fogNear: 400, fogFar: 2600,
+    fog: 0xe0b489, fogNear: 900, fogFar: 4200,
     sky: 0xd9b98e,
   },
   {
@@ -43,7 +43,7 @@ export const BIOMES = [
     relief: 78, rough: 1.45, curvy: 0.95,
     snow: 760,
     grass: 0x3d8446, grass2: 0x4f9a4a, rock: 0x6f7566, soil: 0x4c3f30,
-    fog: 0x8fbfa0, fogNear: 70, fogFar: 620,
+    fog: 0x8fbfa0, fogNear: 260, fogFar: 1500,
     sky: 0xa8c9b4,
   },
   {
@@ -51,7 +51,7 @@ export const BIOMES = [
     relief: 280, rough: 1.35, curvy: 1.7,
     snow: 336,
     grass: 0x8b9593, grass2: 0xa2aaa8, rock: 0x7c828c, soil: 0x6d727b,
-    fog: 0xdfe8f2, fogNear: 90, fogFar: 1100,
+    fog: 0xdfe8f2, fogNear: 320, fogFar: 2300,
     sky: 0xc3d6ea,
   },
   {
@@ -59,7 +59,7 @@ export const BIOMES = [
     relief: 14, rough: 0.7, curvy: 0.45,
     snow: 620,
     grass: 0x64784a, grass2: 0x738450, rock: 0x6d6f65, soil: 0x4c5140,
-    fog: 0x8d9c96, fogNear: 60, fogFar: 800,
+    fog: 0x8d9c96, fogNear: 220, fogFar: 1500,
     sky: 0x93a7ad,
   },
   {
@@ -67,7 +67,7 @@ export const BIOMES = [
     relief: 150, rough: 1.7, curvy: 1.15,
     snow: 560,
     grass: 0x46403f, grass2: 0x534b49, rock: 0x363231, soil: 0x2f2b2a,
-    fog: 0x77675f, fogNear: 80, fogFar: 900,
+    fog: 0x77675f, fogNear: 280, fogFar: 1900,
     sky: 0x8a7168,
   },
 ];

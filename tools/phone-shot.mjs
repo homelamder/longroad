@@ -15,7 +15,7 @@ await page.emulate({
 await (await page.createCDPSession()).send('Emulation.setFocusEmulationEnabled', { enabled: true });
 page.on('pageerror', (e) => console.error('PAGEERROR', e.stack || e.message));
 await page.evaluateOnNewDocument(() => localStorage.setItem('lr.quality', 'low'));
-await page.goto('http://localhost:5190', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.goto('http://localhost:5199', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction('window.__game && window.__game.ready', { timeout: 180000 });
 await page.evaluate(() => {
   const g = window.__game;

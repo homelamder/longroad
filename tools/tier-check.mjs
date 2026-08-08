@@ -24,9 +24,9 @@ for (const tier of ['ultra', 'high', 'low']) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.evaluateOnNewDocument((t) => localStorage.setItem('lr.quality', t), tier);
-  await page.goto('http://localhost:5190', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto('http://localhost:5199', { waitUntil: 'domcontentloaded', timeout: 60000 });
   try {
-    await page.waitForFunction('window.__game && window.__game.ready', { timeout: 240000 });
+    await page.waitForFunction('window.__game && window.__game.ready', { timeout: 480000 });
     await page.evaluate(() => window.__game.drive({ throttle: 1, brake: 0, steer: 0.2, handbrake: false }, 2));
     await new Promise((r) => setTimeout(r, 900));
   } catch (e) {

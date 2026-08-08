@@ -3,6 +3,6 @@ export default {
   // An env flag rather than --base on the CLI: Git Bash on Windows rewrites any
   // argument that starts with a slash into a C:/Program Files/... path.
   base: process.env.PAGES ? '/longroad/' : '/',
-  server: { port: 5190 },
+  server: { port: 5199, strictPort: true },
   build: { target: 'es2022' },
 };

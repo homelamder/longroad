@@ -90,9 +90,15 @@ export function buildCarBody(spec) {
   g.name = `car-${spec.id}`;
 
   const style = spec.body || {};
-  const paint = mat(style.paint ?? 0x9a3b2e, {
-    rough: style.finish === 'matte' ? 0.75 : 0.42,
-    metal: style.finish === 'matte' ? 0.15 : style.finish === 'pearl' ? 0.65 : 0.4,
+  // Real car paint: a base coat under a glossy clearcoat, fed by the scene's HDRI
+  // environment. This is most of why the car suddenly looks expensive.
+  const paint = new THREE.MeshPhysicalMaterial({
+    color: style.paint ?? 0x9a3b2e,
+    roughness: style.finish === 'matte' ? 0.68 : 0.36,
+    metalness: style.finish === 'pearl' ? 0.55 : 0.18,
+    clearcoat: style.finish === 'matte' ? 0.2 : 1.0,
+    clearcoatRoughness: 0.08,
+    envMapIntensity: 1.1,
   });
   const L = spec.wheelBase + 1.5;
   const W = spec.track + 0.36;

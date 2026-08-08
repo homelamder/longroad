@@ -2,3 +2,5 @@ node_modules/
 dist/
 shots/
 .DS_Store
+tmp-assets/models-raw/
+tmp-assets/

@@ -1,8 +1,11 @@
 import * as THREE from 'three';
+import { asset } from './asset.js';
 import { QUALITY, QualityMeter, setQuality, TIER_NAMES } from './quality.js';
 import { Terrain, elevation } from './world/terrain.js';
 import { buildRoadMesh, pointAt, nearest, ROAD_LENGTH } from './world/road.js';
 import { Scatter } from './world/scatter.js';
+import { loadVegetation } from './world/veg.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { Grass } from './world/grass.js';
 import { Sky, DAY_LENGTH } from './world/sky.js';
 import { Post } from './world/post.js';
@@ -56,8 +59,20 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4200);
 
 const sky = new Sky(scene, QUALITY);
-const terrain = new Terrain({ quality: QUALITY.terrain });
-const scatter = new Scatter({ quality: QUALITY });
+const terrain = new Terrain({ quality: QUALITY.terrain, textured: true });
+
+// Grow the forest before first frame — realistic trees are generated, not shipped.
+document.getElementById('boot-status').textContent = 'growing the forest';
+const veg = await loadVegetation();
+const scatter = new Scatter({ quality: QUALITY, veg });
+
+// HDRI environment for every reflective surface (car paint above all).
+new RGBELoader().load(asset('/tex/hilly_terrain_01_puresky_1k.hdr'), (hdr) => {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromEquirectangular(hdr).texture;
+  hdr.dispose();
+  pmrem.dispose();
+});
 const grass = new Grass({ quality: QUALITY });
 scene.add(terrain.group);
 scene.add(scatter.group);
@@ -217,9 +232,14 @@ function frame(now) {
   renderer.info.reset();
 
   if (!running) {
-    terrain.update(car.pos.x, car.pos.z, 10);
-    scatter.update(car.pos.x, car.pos.z, 3);
-    grass.update(dt, car.pos.x, car.pos.z, 14);
+    // Burn a real time budget per boot frame instead of one streaming step — the
+    // world settles in a handful of frames even on slow renderers.
+    const t0 = performance.now();
+    do {
+      terrain.update(car.pos.x, car.pos.z, 10);
+      scatter.update(car.pos.x, car.pos.z, 3);
+      grass.update(dt, car.pos.x, car.pos.z, 14);
+    } while (terrain.queue.length && performance.now() - t0 < 60);
     const left = terrain.queue.length;
     bootStatus.textContent = left ? `shaping the land · ${left} left` : 'planting';
     if (!left && scatter.total > 0) {
@@ -255,6 +275,8 @@ function frame(now) {
   grass.update(dt, focus.x, focus.z, 5);
   chase.update(dt, driving ? car : foot);
   sky.update(dt, focus, camera.position);
+  // Reflections dim with the daylight or the night would glow like a showroom.
+  scene.environmentIntensity = 0.08 + sky.daylight * 0.75;
   weather.update(dt, camera.position, focus.z);
   animals.update(dt, focus, driving ? Math.abs(car.speed) : foot.moving * 3.2);
   water.update(dt);

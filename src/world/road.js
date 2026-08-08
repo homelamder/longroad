@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { asset } from '../asset.js';
 import { JOURNEY, biomeAt, roadElevation } from './biomes.js';
 import { makeNoise, clamp, lerp } from './rng.js';
 
@@ -171,34 +172,39 @@ export function pointAt(along) {
 // --- mesh -------------------------------------------------------------------
 // Split out from the maths above so this module stays importable in plain node.
 
+// Photographic asphalt (PolyHaven asphalt_02, CC0) with the lane markings painted
+// onto the diffuse in a canvas once the photo arrives. Until then the canvas shows
+// plain dark asphalt, so there is no pop from untextured to textured.
 function asphaltTexture() {
-  const W = 64, H = 512;
+  const W = 1024, H = 1024;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const g = c.getContext('2d');
-  g.fillStyle = '#33322f';
+  g.fillStyle = '#2e2d2b';
   g.fillRect(0, 0, W, H);
-  // Aggregate speckle. Deterministic — a fixed pattern beats a random one that
-  // changes every reload and makes screenshots non-comparable.
-  for (let i = 0; i < 2600; i++) {
-    const x = (i * 37) % W, y = (i * 131) % H;
-    const v = 30 + ((i * 79) % 34);
-    g.fillStyle = `rgba(${v + 20},${v + 18},${v + 16},0.5)`;
-    g.fillRect(x, y, 1, 1);
-  }
-  g.strokeStyle = '#c9c3ae';
-  g.lineWidth = 2;
-  g.beginPath(); g.moveTo(4, 0); g.lineTo(4, H); g.stroke();
-  g.beginPath(); g.moveTo(W - 4, 0); g.lineTo(W - 4, H); g.stroke();
-  g.setLineDash([46, 42]);
-  g.strokeStyle = '#d8d2bc';
-  g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
 
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = 8;
   tex.colorSpace = THREE.SRGBColorSpace;
+
+  const img = new Image();
+  img.onload = () => {
+    g.drawImage(img, 0, 0, W, H);
+    // Worn paint: edge lines and centre dashes at low opacity over the photo.
+    g.globalAlpha = 0.8;
+    g.strokeStyle = '#cfc9b4';
+    g.lineWidth = 14;
+    g.beginPath(); g.moveTo(52, 0); g.lineTo(52, H); g.stroke();
+    g.beginPath(); g.moveTo(W - 52, 0); g.lineTo(W - 52, H); g.stroke();
+    g.setLineDash([110, 96]);
+    g.strokeStyle = '#d8d2bc';
+    g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
+    g.globalAlpha = 1;
+    tex.needsUpdate = true;
+  };
+  img.src = asset('/tex/asphalt_02_diffuse_1k.jpg');
   return tex;
 }
 
@@ -249,10 +255,20 @@ export function buildRoadMesh() {
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
 
+  const loader = new THREE.TextureLoader();
+  const rep = (t) => {
+    t.wrapS = THREE.ClampToEdgeWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    return t;
+  };
   const mat = new THREE.MeshStandardMaterial({
     map: asphaltTexture(),
+    normalMap: rep(loader.load(asset('/tex/asphalt_02_nor_gl_1k.jpg'))),
+    normalScale: new THREE.Vector2(0.7, 0.7),
+    roughnessMap: rep(loader.load(asset('/tex/asphalt_02_rough_1k.jpg'))),
     vertexColors: true,
-    roughness: 0.92,
+    roughness: 1.0,
     metalness: 0.0,
     polygonOffset: true,
     polygonOffsetFactor: -2,

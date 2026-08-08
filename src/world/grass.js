@@ -157,7 +157,7 @@ export class Grass {
         for (let k = 0; k < 16; k++) rows.push(m.elements[k]);
 
         mixColor(clamp(z, 0, JOURNEY), 'grass', this._c);
-        const shade = 0.7 + h3 * 0.55;
+        const shade = 0.5 + h3 * 0.42;   // darker: blades sit IN the sward, not on it
         rows.push(this._c.r * shade, this._c.g * shade, this._c.b * shade);
       }
     }

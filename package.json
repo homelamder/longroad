@@ -11,6 +11,7 @@
     "shot": "node tools/shot.mjs"
   },
   "dependencies": {
+    "@dgreenheck/ez-tree": "^1.1.0",
     "simplex-noise": "^4.0.3",
     "three": "^0.185.1"
   },
