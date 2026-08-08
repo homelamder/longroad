@@ -159,3 +159,28 @@ console.log('animals ok — herds deterministic, flee/calm behave, road stays cl
   }
   console.log('cats ok — tiger and lion warn by name, strike once, ignore cars');
 }
+
+// --- the giants -------------------------------------------------------------
+// Elephants and giraffes: clean geometry, live herds, and three tonnes of
+// elephant is a wall even to a car.
+{
+  const { bigAnimalsNear, activeAnimals } = await import('../src/animals/animals.js');
+  // The determinism check above constructed throwaway Animals instances, and the
+  // constructor registration means the LAST one owns the singleton. Re-point it.
+  activeAnimals.current = an;
+  for (const sp of ['elephant', 'giraffe']) {
+    const herd = an.spawnAt(sp, 200, 5600, 3);
+    for (let i = 0; i < 240; i++) an.update(1 / 60, { x: 0, z: 0 }, 0, false);
+    for (const a of herd.animals) {
+      assert.ok(Number.isFinite(a.x + a.y + a.z), `${sp} escaped to NaN`);
+    }
+    const near = bigAnimalsNear(200, 5600);
+    assert.ok(near.length >= 1, `${sp} not registered as a big obstacle`);
+    an.release(herd);
+  }
+  const geoElephant = (await import('../src/animals/sculpt.js')).buildElephantBody();
+  const arr = geoElephant.getAttribute('position').array;
+  for (let i = 0; i < arr.length; i++) assert.ok(Number.isFinite(arr[i]), 'elephant NaN vertex');
+  assert.ok(geoElephant.getAttribute('color'), 'elephant has no baked colours');
+  console.log('giants ok — herds live, geometry clean, registered as obstacles');
+}

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { elevation } from '../world/terrain.js';
 import { nearest, corridorWeight, pointAt } from '../world/road.js';
 import { obstaclesNear } from '../world/scatter.js';
+import { bigAnimalsNear } from '../animals/animals.js';
 import { clamp, lerp } from '../world/rng.js';
 
 // Arcade, not simulation. The car goes where it points; how much it refuses to is
@@ -195,6 +196,9 @@ export class Car {
     // scrubs a little and shoves the nose aside; a square hit is a wall.
     if (!this.airborne) {
       const obs = obstaclesNear(this.pos.x, this.pos.z, this._obs || (this._obs = []));
+      // Megafauna join the solid world as moving obstacles.
+      const big = bigAnimalsNear(this.pos.x, this.pos.z, this._big || (this._big = []));
+      for (const b of big) obs.push(b);
       if (obs.length) {
         const R = 1.05;
         const f = this.forward();

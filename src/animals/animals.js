@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildElephantBody, buildGiraffeBody, furPainter, mergeParts } from './sculpt.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { asset } from '../asset.js';
@@ -109,6 +110,27 @@ export const SPECIES = {
 // Pack temperament presets, cycled with V and persisted. `grace` is the pause
 // between the treeline warning and the pack being allowed to close - calm packs
 // always give you time to walk away.
+// Physics asks where the megafauna are without importing the instance - same
+// registration pattern the scatter obstacles use.
+export const activeAnimals = { current: null };
+
+export function bigAnimalsNear(x, z, out = []) {
+  out.length = 0;
+  const an = activeAnimals.current;
+  if (!an) return out;
+  // Both herd collections: FAUNA site herds and task/manual spawns.
+  const scan = (herd) => {
+    if (!herd || !herd.spec.big) return;
+    for (const a of herd.animals) {
+      const dx = a.x - x, dz = a.z - z;
+      if (dx * dx + dz * dz < 400) out.push({ x: a.x, z: a.z, r: herd.spec.big });
+    }
+  };
+  for (const herd of an.herds.values()) scan(herd);
+  for (const herd of an.tasked) scan(herd);
+  return out;
+}
+
 export const WOLF_TEMPERS = {
   off: null,
   calm: { notice: 32, charge: 10, strike: 2.3, cooldown: 45, grace: 5 },
@@ -176,28 +198,8 @@ function buildBearBody() {
   }
   push(new THREE.SphereGeometry(0.09, 6, 5), M(0, 0.86, -1.02), DARK);                    // tail
 
-  const pos = [], nor = [], col = [], idx = [];
-  let base = 0;
-  const c = new THREE.Color();
-  for (const [geo, tint] of parts) {
-    c.setHex(tint, 'srgb');
-    const p = geo.getAttribute('position'), n = geo.getAttribute('normal');
-    for (let i = 0; i < p.count; i++) {
-      pos.push(p.getX(i), p.getY(i), p.getZ(i));
-      nor.push(n.getX(i), n.getY(i), n.getZ(i));
-      col.push(c.r, c.g, c.b);
-    }
-    const index = geo.getIndex();
-    for (let i = 0; i < index.count; i++) idx.push(base + index.getX(i));
-    base += p.count;
-  }
-  const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  out.setIndex(idx);
-  out.computeBoundingSphere();
-  return out;
+  // Fur variation for the bear too - hide drifts warm and cool across the bulk.
+  return mergeParts(parts, furPainter(0.11));
 }
 
 // Both big cats share one feline armature: long low body, deep chest, small
@@ -248,28 +250,8 @@ function buildCatBody({ fur, dark, belly, mane = 0, stripes = 0, scale = 1 }) {
     .premultiply(M(0, 0.52, -1.02)), fur);
   push(new THREE.SphereGeometry(0.06, 6, 5), M(0, 0.28, -1.24), dark);                  // tail tip
 
-  const pos = [], nor = [], col = [], idx = [];
-  let base = 0;
-  const c = new THREE.Color();
-  for (const [geo, tint] of parts) {
-    c.setHex(tint, 'srgb');
-    const p = geo.getAttribute('position'), n = geo.getAttribute('normal');
-    for (let i = 0; i < p.count; i++) {
-      pos.push(p.getX(i), p.getY(i), p.getZ(i));
-      nor.push(n.getX(i), n.getY(i), n.getZ(i));
-      col.push(c.r, c.g, c.b);
-    }
-    const index = geo.getIndex();
-    for (let i = 0; i < index.count; i++) idx.push(base + index.getX(i));
-    base += p.count;
-  }
-  const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  out.setIndex(idx);
-  out.computeBoundingSphere();
-  return out;
+  // Fur-noise paint replaces the flat tints that read as moulded plastic.
+  return mergeParts(parts, furPainter(0.13));
 }
 
 // The ambush cat of Whisper Falls: silent, solitary, closest notice radius in
@@ -304,6 +286,19 @@ SPECIES.bear = {
   predator: BEAR_TEMPERS[wolfTemper.name],
 };
 
+// The canyon giants. Neither is a predator; an elephant's answer to almost
+// everything is to simply keep being an elephant.
+SPECIES.elephant = {
+  geo: buildElephantBody,
+  speed: 4.5, flee: 0, calm: 6, herd: [2, 4], wander: 8,
+  big: 1.7,          // dynamic collision radius - cars do not drive through these
+};
+SPECIES.giraffe = {
+  geo: buildGiraffeBody,
+  speed: 6.5, flee: 14, calm: 6, herd: [2, 4], wander: 10,
+  big: 1.0,
+};
+
 // Species know their own names, so warnings and strikes can speak plainly.
 for (const k in SPECIES) SPECIES[k].id = k;
 
@@ -311,7 +306,7 @@ for (const k in SPECIES) SPECIES[k].id = k;
 const FAUNA = {
   verdant: [['goat', 3], ['sheep', 3], ['deer', 1]],
   duskwood: [['elk', 2], ['deer', 2], ['fox', 1], ['wolf', 1]],
-  emberfall: [['fox', 2], ['lion', 0.5]],
+  emberfall: [['fox', 2], ['lion', 0.5], ['elephant', 0.35], ['giraffe', 0.45]],
   whisper: [['monkey', 3], ['tapir', 1], ['tiger', 0.4]],
   frostveil: [['goat', 2], ['wolf', 1], ['bear', 0.5]],
   marsh: [['heron', 3], ['deer', 1]],
@@ -344,6 +339,7 @@ const CAP = 96;                    // hard ceiling on live animals per species
 
 export class Animals {
   constructor(scene) {
+    activeAnimals.current = this;
     this.scene = scene;
     this.meshes = {};
     this.herds = new Map();        // siteKey -> herd
