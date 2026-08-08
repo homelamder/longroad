@@ -123,10 +123,14 @@ while (car.along < ROAD_LENGTH - 60 && simSeconds < MAX_SIM) {
     const task = mgr.active.task;
     if (task.goal && mgr.mode === 'drive') {
       const d = Math.hypot(car.pos.x - task.goal.x, car.pos.z - task.goal.z);
-      if (d > 13) {
-        car.pos.x += ((task.goal.x - car.pos.x) / d) * 22 * DT;
-        car.pos.z += ((task.goal.z - car.pos.z) / d) * 22 * DT;
-        car.speed = 22;
+      // The runaway sheep panics above ~9 m/s when close: this brain creeps in.
+      const v = task.id === 'runaway' ? 4.5 : 22;
+      if (d > (task.id === 'runaway' ? 10 : 13)) {
+        car.pos.x += ((task.goal.x - car.pos.x) / d) * v * DT;
+        car.pos.z += ((task.goal.z - car.pos.z) / d) * v * DT;
+        car.speed = v;
+      } else {
+        car.speed = 0;
       }
     } else if (task.id === 'ford-river' && mgr.mode === 'drive') {
       const along = car.along + 3.0 * DT;

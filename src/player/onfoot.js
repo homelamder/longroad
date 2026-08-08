@@ -22,27 +22,41 @@ export class OnFoot {
     this.mesh = buildWalker();
     this.mesh.visible = false;
 
-    // A real rigged human (the three.js Soldier, Mixamo-rigged, idle/walk/run
-    // baked in). Loads async over the capsule walker; if the fetch fails the
-    // capsule simply keeps the job, so on-foot never breaks offline.
+    // A civilian human (Quaternius Animated Human, CC0, converted FBX -> GLB with
+    // fbx2gltf). Clips ship as 'Human Armature|Idle' etc; strip the prefix. The
+    // texture is a 32x32 palette assigned at runtime because fbx2gltf could not
+    // embed it. If anything fails to load the capsule walker keeps the job.
     this.mixer = null;
     this.actions = null;
     this.activeAction = null;
+    this.vy = 0;
+    this.jumping = false;
     // Vite-only: node test runs stub the DOM, so the bundler env is the real tell.
-    if (import.meta.env) new GLTFLoader().load(asset('/models/Soldier.glb'), (gltf) => {
+    if (import.meta.env) new GLTFLoader().load(asset('/models/human.glb'), (gltf) => {
       const human = gltf.scene;
-      human.scale.setScalar(1.0);
-      human.rotation.y = Math.PI;          // Soldier authors facing -Z; we face +Z
+      // Normalize to a 1.75 m person whatever unit the FBX arrived in.
+      const box = new THREE.Box3().setFromObject(human);
+      const h = box.max.y - box.min.y || 1;
+      human.scale.setScalar(1.75 / h);
+      human.rotation.y = Math.PI;
+      const skin = new THREE.TextureLoader().load(asset('/models/human_skin.png'));
+      skin.flipY = false;                    // glTF UV convention
+      skin.colorSpace = THREE.SRGBColorSpace;
+      skin.magFilter = THREE.NearestFilter;  // palette texture: crisp cells, no smear
       human.traverse((o) => {
-        if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; }
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = false;
+          o.material = new THREE.MeshStandardMaterial({ map: skin, roughness: 0.86 });
+          o.frustumCulled = false;           // skinned bounds lag the pose
+        }
       });
-      // Retire the capsule pieces, keep the group as the transform carrier.
       for (const child of [...this.mesh.children]) this.mesh.remove(child);
       this.mesh.add(human);
       this.mixer = new THREE.AnimationMixer(human);
       this.actions = {};
       for (const clip of gltf.animations) {
-        this.actions[clip.name] = this.mixer.clipAction(clip);
+        this.actions[clip.name.replace(/^.*\|/, '')] = this.mixer.clipAction(clip);
       }
       const idle = this.actions.Idle || Object.values(this.actions)[0];
       if (idle) { idle.play(); this.activeAction = idle; }
@@ -73,6 +87,19 @@ export class OnFoot {
     this.activeAction = next;
   }
 
+  // One-shot overlay (Working, Jump): plays over the locomotion blend, then hands
+  // control back to the state machine on its own.
+  playOnce(name) {
+    if (!this.actions || !this.actions[name]) return;
+    const a = this.actions[name];
+    a.reset();
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = false;
+    a.fadeIn(0.08).play();
+    this.oneShot = a;
+    this.oneShotT = a.getClip().duration;
+  }
+
   update(dt, input, camYaw = null) {
     // With the mouse orbit active, W walks where the camera looks and A/D strafe.
     // Without it, classic tank turning stays.
@@ -89,9 +116,22 @@ export class OnFoot {
     const go = clamp((input.throttle || 0) - (input.brake || 0) * 0.55, -0.55, 1);
     this.moving = lerp(this.moving, go, Math.min(1, dt * 8));
 
+    // Sprint doubles the stride; jump is a small ballistic arc with its clip.
+    const sprint = input.sprint && this.moving > 0.05 ? 1.9 : 1;
+    if (input.jump && !this.jumping) {
+      this.jumping = true;
+      this.vy = 4.6;
+      this.playOnce('Jump');
+    }
+    if (this.jumping) {
+      this.vy -= 13.5 * dt;
+      this.jumpY = (this.jumpY || 0) + this.vy * dt;
+      if (this.jumpY <= 0) { this.jumpY = 0; this.jumping = false; this.vy = 0; }
+    }
+
     if (Math.abs(this.moving) > 0.02) {
       const f = this.forward();
-      const step = WALK * this.moving * dt;
+      const step = WALK * sprint * this.moving * dt;
       const nx = this.pos.x + f.x * step, nz = this.pos.z + f.z * step;
       const ny = elevation(nx, nz);
       // Legs refuse slopes wheels would relish.
@@ -117,9 +157,16 @@ export class OnFoot {
     if (!this.human) this.mesh.position.y += Math.abs(Math.sin(this.bob)) * 0.06;
     this.mesh.rotation.y = this.yaw;
 
+    this.mesh.position.y += this.jumpY || 0;
+
     if (this.mixer) {
-      const sp = Math.abs(this.moving || 0);
-      this.play(sp > 0.72 ? 'Run' : sp > 0.06 ? 'Walk' : 'Idle');
+      if (this.oneShotT > 0) {
+        this.oneShotT -= dt;
+        if (this.oneShotT <= 0 && this.oneShot) { this.oneShot.fadeOut(0.12); this.oneShot = null; }
+      } else {
+        const sp = Math.abs(this.moving || 0) * (input.sprint ? 1.9 : 1);
+        this.play(sp > 0.85 ? 'Run' : sp > 0.06 ? 'Walk' : 'Idle');
+      }
       this.mixer.update(dt);
     }
 

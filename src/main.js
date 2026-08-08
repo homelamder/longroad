@@ -13,6 +13,7 @@ import { Weather } from './world/weather.js';
 import { Animals } from './animals/animals.js';
 import { MarshWater } from './world/water.js';
 import { Landmarks } from './world/landmarks.js';
+import { Secrets } from './world/secrets.js';
 import { Finale } from './world/finale.js';
 import { Ending } from './game/ending.js';
 import { Save } from './game/save.js';
@@ -36,6 +37,7 @@ import { FIRST_TASKS } from './game/tasks/firstthree.js';
 import { CREATURE_TASKS } from './game/tasks/creatures.js';
 import { DRIVING_TASKS } from './game/tasks/driving.js';
 import { SURVIVAL_TASKS } from './game/tasks/survival.js';
+import { WONDER_TASKS } from './game/tasks/wonders.js';
 
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
@@ -103,6 +105,13 @@ const hud = new Hud();
 game.hud = hud;
 const garage = new Garage(scene, game);
 addEventListener('keydown', (e) => {
+  // F steps out of the car anywhere — free roam, no task attached. The world
+  // just carries on around you.
+  if (e.code === 'KeyF' && !e.repeat && tasks.mode === 'drive' && !tasks.busy
+    && !garage.open && Math.abs(car.speed) < 1.5) {
+    tasks.exitCar();
+    hud.note('on foot — E by the car to drive on', 4);
+  }
   if (e.code === 'KeyG' && !e.repeat && tasks.mode === 'drive' && !tasks.busy
     && Math.abs(car.speed) < 1.5) garage.toggle();
   if (e.code === 'Escape' && garage.open) garage.toggle(false);
@@ -121,13 +130,14 @@ const stations = new Stations(scene);
 const marker = new Marker(scene);
 const interact = new Interact(hud, controls);
 const tasks = new TaskManager(
-  [...FIRST_TASKS, ...CREATURE_TASKS, ...DRIVING_TASKS, ...SURVIVAL_TASKS],
+  [...FIRST_TASKS, ...CREATURE_TASKS, ...DRIVING_TASKS, ...SURVIVAL_TASKS, ...WONDER_TASKS],
   { scene, car, foot, hud, marker, interact, chase, station: null,
     animals, weather, sky, landmarks, biomeAt },
 );
 
 const ending = new Ending({ hud, sky, weather, fuel });
 const audio = new Audio();
+const secrets = new Secrets(scene, { sky, weather, hud, audio });
 const save = new Save({ car, fuel, sky, stations, ending });
 const resumed = save.restore();
 if (resumed) chase.snap(car);
@@ -143,6 +153,16 @@ function gameLogic(dt, input) {
   hud.setFuel(fuel.fraction, fuel.jerrycans, fuel.onReserve);
   stations.setNight(sky.daylight < 0.4);
   marker.update(dt);
+
+  // Free roam: on foot with no task. The only interactable is the car door.
+  if (!tasks.busy && tasks.mode === 'foot') {
+    interact.set({ x: car.pos.x, z: car.pos.z, radius: 3.4, label: 'drive on' });
+    if (interact.update(foot)) {
+      interact.clear();
+      tasks.enterCar();
+    }
+    return;
+  }
 
   if (tasks.busy) {
     if (tasks.update(dt) === 'done') {
@@ -283,6 +303,7 @@ function frame(now) {
   animals.update(dt, focus, driving ? Math.abs(car.speed) : foot.moving * 3.2);
   water.update(dt);
   landmarks.update(dt, focus);
+  secrets.update(dt, focus);
   finale.update(dt, focus);
   ending.track(dt, car, sky);
   ending.update(car, garage);
@@ -321,7 +342,7 @@ window.__game = {
   get carMesh() { return game.carMesh; },
   garage,
   chase, controls, hud, quality: QUALITY,
-  fuel, stations, tasks, foot, interact, weather, animals, water, landmarks, finale, ending, save, audio,
+  fuel, stations, tasks, foot, interact, weather, animals, water, landmarks, finale, ending, save, audio, secrets,
   elevation, pointAt, nearest, biomeAt, JOURNEY, ROAD_LENGTH, DAY_LENGTH,
   TIER_NAMES, setQuality,
   get ready() { return running; },

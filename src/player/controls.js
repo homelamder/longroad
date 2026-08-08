@@ -4,7 +4,7 @@ import { clamp } from '../world/rng.js';
 // use, so the car handles identically on a phone and on a keyboard.
 export class Controls {
   constructor(root = document.body) {
-    this.state = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+    this.state = { throttle: 0, brake: 0, steer: 0, handbrake: false, sprint: false, jump: false };
     this.steerTarget = 0;
     this.keys = new Set();
     this.touch = { left: 0, right: 0, gas: 0, brake: 0, hand: false };
@@ -152,6 +152,10 @@ export class Controls {
     this.state.throttle = gas;
     this.state.brake = brake;
     this.state.handbrake = hand;
+    this.state.sprint = k.has('ShiftLeft') || k.has('ShiftRight');
+    // Jump is edge-triggered: consumed the frame after Space goes down on foot.
+    this.state.jump = k.has('Space') && !this._spaceHeld;
+    this._spaceHeld = k.has('Space');
     return this.state;
   }
 }

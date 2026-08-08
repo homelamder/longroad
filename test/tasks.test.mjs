@@ -6,6 +6,7 @@ import { FIRST_TASKS } from '../src/game/tasks/firstthree.js';
 import { CREATURE_TASKS } from '../src/game/tasks/creatures.js';
 import { DRIVING_TASKS } from '../src/game/tasks/driving.js';
 import { SURVIVAL_TASKS } from '../src/game/tasks/survival.js';
+import { WONDER_TASKS } from '../src/game/tasks/wonders.js';
 import { Car, DEFAULT_CAR } from '../src/car/physics.js';
 import { OnFoot } from '../src/player/onfoot.js';
 import { Animals } from '../src/animals/animals.js';
@@ -19,8 +20,8 @@ import { STATION_POSITIONS } from '../src/game/stations.js';
 // Every one of the sixteen tasks, driven start to completion through the same
 // interfaces the player uses. Each task runs at a station inside its own biome.
 
-const ALL = [...FIRST_TASKS, ...CREATURE_TASKS, ...DRIVING_TASKS, ...SURVIVAL_TASKS];
-assert.equal(ALL.length, 16, `expected 16 tasks, have ${ALL.length}`);
+const ALL = [...FIRST_TASKS, ...CREATURE_TASKS, ...DRIVING_TASKS, ...SURVIVAL_TASKS, ...WONDER_TASKS];
+assert.equal(ALL.length, 19, `expected 19 tasks, have ${ALL.length}`);
 
 // A station in each biome (by along-distance ranges of the regions).
 const stationIn = (list, lo, hi) => list.find((s) => s.along > lo && s.along < hi);
@@ -113,6 +114,26 @@ run('bridge', duskwood);
 
 // round-up: shoo three strays, then the escort walks them home — takes sim time.
 run('round-up', verdant, { maxSteps: 20000 });
+
+// The new wonder tasks: two on foot via the generic driver, one chase by car.
+run('stargazer', duskwood, { night: true });
+run('log-jam', whisper);
+run('runaway', verdant, {
+  maxSteps: 24000,
+  drive(w, task) {
+    const g = task.goal;
+    const d = Math.hypot(w.car.pos.x - g.x, w.car.pos.z - g.z);
+    // Creep in: slow enough never to spook it, fast enough to close.
+    if (d > 10) {
+      const step = 4.5 * (1 / 30);
+      w.car.pos.x += ((g.x - w.car.pos.x) / d) * step;
+      w.car.pos.z += ((g.z - w.car.pos.z) / d) * step;
+      w.car.speed = 4.5;
+    } else {
+      w.car.speed = 0;
+    }
+  },
+});
 
 // photograph: the generic driver already teleports gently (moving = 0).
 run('photograph', verdant, { maxSteps: 16000 });
