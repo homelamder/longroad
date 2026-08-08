@@ -145,8 +145,61 @@ SPECIES.wolf = {
 // The mountain bear: a solitary bulk of shoulder and hump, slower than wolves at
 // a walk but shockingly fast in the charge. Usually alone, sometimes a mother
 // and grown cub.
+// The bear gets sculpted anatomy rather than the box rig: overlapping spheres
+// make the shoulder hump and haunches read at arm's length, where every close
+// encounter with this species happens. Same contract as buildBody: one merged
+// BufferGeometry with baked vertex colours, ready for the InstancedMesh.
+function buildBearBody() {
+  const FUR = 0x5b4632, DARK = 0x392c1f;
+  const parts = [];
+  const push = (geo, m, tint) => {
+    const c = geo.applyMatrix4(m);
+    c.computeVertexNormals();
+    parts.push([c, tint]);
+  };
+  const M = (x, y, z, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4()
+    .makeScale(sx, sy, sz)
+    .premultiply(new THREE.Matrix4().makeTranslation(x, y, z));
+
+  push(new THREE.SphereGeometry(0.52, 12, 10), M(0, 0.78, -0.05, 1.0, 0.94, 1.5), FUR);   // torso
+  push(new THREE.SphereGeometry(0.4, 10, 8), M(0, 1.06, 0.28, 0.92, 0.85, 1.0), FUR);     // hump
+  push(new THREE.SphereGeometry(0.42, 10, 8), M(0, 0.82, -0.62, 0.95, 0.9, 1.0), FUR);    // haunch
+  push(new THREE.SphereGeometry(0.27, 10, 8), M(0, 1.02, 0.78), FUR);                     // head
+  push(new THREE.SphereGeometry(0.13, 8, 6), M(0, 0.94, 1.0, 0.9, 0.75, 1.2), DARK);      // snout
+  for (const sx of [-1, 1]) {
+    push(new THREE.SphereGeometry(0.075, 6, 5), M(sx * 0.17, 1.24, 0.72), DARK);          // ears
+  }
+  for (const [lx, lz] of [[-0.3, 0.34], [0.3, 0.34], [-0.32, -0.58], [0.32, -0.58]]) {
+    push(new THREE.CylinderGeometry(0.11, 0.13, 0.62, 8), M(lx, 0.31, lz), DARK);         // legs
+  }
+  push(new THREE.SphereGeometry(0.09, 6, 5), M(0, 0.86, -1.02), DARK);                    // tail
+
+  const pos = [], nor = [], col = [], idx = [];
+  let base = 0;
+  const c = new THREE.Color();
+  for (const [geo, tint] of parts) {
+    c.setHex(tint, 'srgb');
+    const p = geo.getAttribute('position'), n = geo.getAttribute('normal');
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      nor.push(n.getX(i), n.getY(i), n.getZ(i));
+      col.push(c.r, c.g, c.b);
+    }
+    const index = geo.getIndex();
+    for (let i = 0; i < index.count; i++) idx.push(base + index.getX(i));
+    base += p.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  out.setIndex(idx);
+  out.computeBoundingSphere();
+  return out;
+}
+
 SPECIES.bear = {
-  geo: () => buildBody({ body: [0.85, 0.9, 1.55], head: [0.42, 0.44, 0.52], legs: 0.52, tail: 0.1, colour: 0x5b4632, dark: 0x392c1f }),
+  geo: buildBearBody,
   speed: 7.2, flee: 0, calm: 5, herd: [1, 2], wander: 10,
   predator: BEAR_TEMPERS[wolfTemper.name],
 };
