@@ -131,3 +131,31 @@ console.log('animals ok — herds deterministic, flee/calm behave, road stays cl
   an.release(bears);
   console.log('bear hunt ok — warned by name, one swat, long cooldown, cars ignored');
 }
+
+// --- the cats ---------------------------------------------------------------
+// Tiger and lion run the same predator contract with their own voices: warn by
+// name, strike once, cool down, never touch a car.
+{
+  setWolfTemper('calm');
+  for (const [species, x, z] of [['tiger', 700, 7500], ['lion', -400, 5500]]) {
+    const cats = an.spawnAt(species, x, z, 2);
+    let strikes = 0, warnSpec = null;
+    an.onStrike = () => strikes++;
+    an.onStalk = (a, spec) => { warnSpec = spec?.id; };
+    const walker = { x, z: z + 20 };
+    for (let i = 0; i < 60 * 40; i++) {
+      an.update(1 / 60, walker, 0, true);
+      if (strikes > 0) break;
+    }
+    assert.equal(warnSpec, species, `${species} warning misnamed (${warnSpec})`);
+    assert.equal(strikes, 1, `${species}: expected one strike, got ${strikes}`);
+    assert.ok(cats.cool > 30, `${species} cooldown missing`);
+    let carStrikes = 0;
+    cats.cool = 0;
+    an.onStrike = () => carStrikes++;
+    for (let i = 0; i < 60 * 6; i++) an.update(1 / 60, walker, 0, false);
+    assert.equal(carStrikes, 0, `${species} attacked a car`);
+    an.release(cats);
+  }
+  console.log('cats ok — tiger and lion warn by name, strike once, ignore cars');
+}

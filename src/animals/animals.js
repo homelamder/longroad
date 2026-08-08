@@ -132,6 +132,8 @@ export function setWolfTemper(name) {
   wolfTemper.name = name;
   SPECIES.wolf.predator = WOLF_TEMPERS[name];
   SPECIES.bear.predator = BEAR_TEMPERS[name];
+  SPECIES.tiger.predator = TIGER_TEMPERS[name];
+  SPECIES.lion.predator = LION_TEMPERS[name];
   if (typeof localStorage !== 'undefined') localStorage.setItem('lr.wolves', name);
   return name;
 }
@@ -198,6 +200,104 @@ function buildBearBody() {
   return out;
 }
 
+// Both big cats share one feline armature: long low body, deep chest, small
+// round-eared head, long tail. The options give the tiger its stripe rings and
+// the lion its mane.
+function buildCatBody({ fur, dark, belly, mane = 0, stripes = 0, scale = 1 }) {
+  const parts = [];
+  const push = (geo, m, tint) => {
+    const c = geo.applyMatrix4(m);
+    c.computeVertexNormals();
+    parts.push([c, tint]);
+  };
+  const S = scale;
+  const M = (x, y, z, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4()
+    .makeScale(sx * S, sy * S, sz * S)
+    .premultiply(new THREE.Matrix4().makeTranslation(x * S, y * S, z * S));
+
+  push(new THREE.SphereGeometry(0.38, 12, 10), M(0, 0.62, 0, 1.0, 0.9, 1.9), fur);      // body
+  push(new THREE.SphereGeometry(0.34, 10, 8), M(0, 0.66, 0.5, 1.0, 1.0, 1.1), fur);     // chest
+  push(new THREE.SphereGeometry(0.3, 10, 8), M(0, 0.6, -0.55, 0.95, 0.9, 1.0), fur);    // haunch
+  push(new THREE.SphereGeometry(0.3, 10, 8), M(0, 0.42, 0.15, 0.85, 0.6, 1.5), belly);  // underside
+  push(new THREE.SphereGeometry(0.21, 10, 8), M(0, 0.88, 0.86), fur);                   // head
+  push(new THREE.SphereGeometry(0.1, 8, 6), M(0, 0.8, 1.04, 0.95, 0.8, 1.1), belly);    // muzzle
+  for (const sx of [-1, 1]) {
+    push(new THREE.ConeGeometry(0.06, 0.1, 6), M(sx * 0.13, 1.06, 0.8), dark);          // ears
+  }
+  if (mane) {
+    push(new THREE.SphereGeometry(0.32, 12, 10), M(0, 0.84, 0.74, 1.15, 1.2, 0.95), mane);
+    push(new THREE.SphereGeometry(0.26, 10, 8), M(0, 0.7, 0.6, 1.2, 1.0, 0.8), mane);
+  }
+  if (stripes) {
+    // Stripe rings wrap the barrel vertically - a torus already lies in the XY
+    // plane facing +Z, which IS a vertical hoop around a z-long body. Rotating
+    // it flat was how the tiger briefly wore one racing stripe instead.
+    for (const tz of [-0.42, -0.18, 0.08, 0.34]) {
+      const ring = new THREE.TorusGeometry(0.36, 0.03, 6, 18);
+      push(ring, M(0, 0.62, tz, 1.0, 0.92, 1.0), dark);
+    }
+  }
+  const legGeo = () => new THREE.CylinderGeometry(0.075, 0.09, 0.52, 8);
+  for (const [lx, lz] of [[-0.2, 0.42], [0.2, 0.42], [-0.22, -0.5], [0.22, -0.5]]) {
+    push(legGeo(), M(lx, 0.26, lz), fur);
+  }
+  // Tail hangs down and back in a lazy arc, not a horizontal rod.
+  const tail = new THREE.CylinderGeometry(0.035, 0.05, 0.7, 6);
+  push(tail, new THREE.Matrix4()
+    .makeRotationX(2.45)
+    .premultiply(M(0, 0.52, -1.02)), fur);
+  push(new THREE.SphereGeometry(0.06, 6, 5), M(0, 0.28, -1.24), dark);                  // tail tip
+
+  const pos = [], nor = [], col = [], idx = [];
+  let base = 0;
+  const c = new THREE.Color();
+  for (const [geo, tint] of parts) {
+    c.setHex(tint, 'srgb');
+    const p = geo.getAttribute('position'), n = geo.getAttribute('normal');
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      nor.push(n.getX(i), n.getY(i), n.getZ(i));
+      col.push(c.r, c.g, c.b);
+    }
+    const index = geo.getIndex();
+    for (let i = 0; i < index.count; i++) idx.push(base + index.getX(i));
+    base += p.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  out.setIndex(idx);
+  out.computeBoundingSphere();
+  return out;
+}
+
+// The ambush cat of Whisper Falls: silent, solitary, closest notice radius in
+// the game because you never see a tiger until it wants you to.
+export const TIGER_TEMPERS = {
+  off: null,
+  calm: { notice: 24, charge: 14, strike: 2.2, cooldown: 50, grace: 3 },
+  wild: { notice: 38, charge: 18, strike: 2.2, cooldown: 18, grace: 1 },
+};
+SPECIES.tiger = {
+  geo: () => buildCatBody({ fur: 0xc06a28, dark: 0x2a2018, belly: 0xe8ddc8, stripes: 1, scale: 1.15 }),
+  speed: 9.5, flee: 0, calm: 4, herd: [1, 1], wander: 12,
+  predator: TIGER_TEMPERS[wolfTemper.name],
+};
+
+// The pride of Emberfall Canyon - dry red-rock country, which is where lions
+// actually live; a jungle lion would be a zoo escape.
+export const LION_TEMPERS = {
+  off: null,
+  calm: { notice: 36, charge: 12, strike: 2.4, cooldown: 45, grace: 5 },
+  wild: { notice: 50, charge: 15, strike: 2.4, cooldown: 16, grace: 2 },
+};
+SPECIES.lion = {
+  geo: () => buildCatBody({ fur: 0xb08a52, dark: 0x3a2c1c, belly: 0xd8c6a4, mane: 0x6b4526, scale: 1.2 }),
+  speed: 9.0, flee: 0, calm: 4, herd: [2, 3], wander: 11,
+  predator: LION_TEMPERS[wolfTemper.name],
+};
+
 SPECIES.bear = {
   geo: buildBearBody,
   speed: 7.2, flee: 0, calm: 5, herd: [1, 2], wander: 10,
@@ -211,8 +311,8 @@ for (const k in SPECIES) SPECIES[k].id = k;
 const FAUNA = {
   verdant: [['goat', 3], ['sheep', 3], ['deer', 1]],
   duskwood: [['elk', 2], ['deer', 2], ['fox', 1], ['wolf', 1]],
-  emberfall: [['fox', 2]],
-  whisper: [['monkey', 3], ['tapir', 1]],
+  emberfall: [['fox', 2], ['lion', 0.5]],
+  whisper: [['monkey', 3], ['tapir', 1], ['tiger', 0.4]],
   frostveil: [['goat', 2], ['wolf', 1], ['bear', 0.5]],
   marsh: [['heron', 3], ['deer', 1]],
   ashen: [],

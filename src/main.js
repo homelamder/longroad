@@ -143,16 +143,23 @@ const tasks = new TaskManager(
 const ending = new Ending({ hud, sky, weather, fuel });
 const audio = new Audio();
 const secrets = new Secrets(scene, { sky, weather, hud, audio });
+// Every predator announces itself and strikes in its own voice.
+const PREDATOR_VOICE = {
+  wolf: { stalk: 'eyes in the treeline…', strike: 'the wolf got you — the pack stands off, for now', g1: 0.5, g2: 1.0 },
+  bear: { stalk: 'something big is watching…', strike: 'the bear swatted you away — give it room', g1: 0.8, g2: 1.4 },
+  tiger: { stalk: 'the undergrowth has gone quiet…', strike: 'the tiger had you — it melts back into the green', g1: 0.6, g2: 1.2 },
+  lion: { stalk: 'low shapes moving in the dry grass…', strike: 'the lion drove you off — the pride settles', g1: 0.7, g2: 1.3 },
+};
 animals.onStalk = (a, spec) => {
-  hud.note(spec?.id === 'bear' ? 'something big is watching…' : 'eyes in the treeline…', 4);
-  audio.growl(spec?.id === 'bear' ? 0.8 : 0.5);
+  const v = PREDATOR_VOICE[spec?.id] || PREDATOR_VOICE.wolf;
+  hud.note(v.stalk, 4);
+  audio.growl(v.g1);
 };
 animals.onStrike = (a, spec) => {
   foot.stagger(a.x, a.z);
-  hud.note(spec?.id === 'bear'
-    ? 'the bear swatted you away — give it room'
-    : 'the wolf got you — the pack stands off, for now', 5);
-  audio.growl(spec?.id === 'bear' ? 1.4 : 1);
+  const v = PREDATOR_VOICE[spec?.id] || PREDATOR_VOICE.wolf;
+  hud.note(v.strike, 5);
+  audio.growl(v.g2);
 };
 const save = new Save({ car, fuel, sky, stations, ending });
 const resumed = save.restore();
