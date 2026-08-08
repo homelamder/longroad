@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { Animals, SPECIES } from '../src/animals/animals.js';
+import { Animals, setWolfTemper, SPECIES } from '../src/animals/animals.js';
 import { nearest } from '../src/world/road.js';
 import { JOURNEY } from '../src/world/biomes.js';
 
@@ -78,6 +78,7 @@ console.log('animals ok — herds deterministic, flee/calm behave, road stays cl
 // A wolf pack must stalk, close, and strike a walker exactly once per cooldown,
 // and must ignore the same position when the player is in the car.
 {
+  setWolfTemper('calm');
   const wolves = an.spawnAt('wolf', 500, 5000, 3);
   let strikes = 0, stalks = 0;
   an.onStrike = () => strikes++;

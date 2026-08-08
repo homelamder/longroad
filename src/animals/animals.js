@@ -106,12 +106,30 @@ export const SPECIES = {
   },
 };
 
+// Pack temperament presets, cycled with V and persisted. `grace` is the pause
+// between the treeline warning and the pack being allowed to close - calm packs
+// always give you time to walk away.
+export const WOLF_TEMPERS = {
+  off: null,
+  calm: { notice: 32, charge: 10, strike: 2.3, cooldown: 45, grace: 5 },
+  wild: { notice: 55, charge: 15, strike: 2.3, cooldown: 14, grace: 1.5 },
+};
+
+const storedTemper = typeof localStorage !== 'undefined' && localStorage.getItem('lr.wolves');
+export const wolfTemper = { name: WOLF_TEMPERS[storedTemper] !== undefined ? storedTemper : 'calm' };
+
+export function setWolfTemper(name) {
+  if (!(name in WOLF_TEMPERS)) return wolfTemper.name;
+  wolfTemper.name = name;
+  SPECIES.wolf.predator = WOLF_TEMPERS[name];
+  if (typeof localStorage !== 'undefined') localStorage.setItem('lr.wolves', name);
+  return name;
+}
+
 SPECIES.wolf = {
   geo: () => buildBody({ body: [0.42, 0.5, 1.05], head: [0.24, 0.26, 0.38], legs: 0.58, tail: 0.34, colour: 0x8c8a86, dark: 0x4a4642 }),
   speed: 8.5, flee: 0, calm: 4, herd: [2, 4], wander: 14,
-  // The hunt: notice a walker at 55 m, close to 15, lunge inside 2.3, then the
-  // pack stands down for a while. Drivers are never prey.
-  predator: { notice: 55, charge: 15, strike: 2.3, cooldown: 14 },
+  predator: WOLF_TEMPERS[wolfTemper.name],
 };
 
 // Which species live where, with herd-site density per km of road.
@@ -386,6 +404,8 @@ export class Animals {
     if (spec.predator && herd.cool > 0) herd.cool -= dt;
     const hunting = spec.predator && this.onFoot && !(herd.cool > 0);
     if (hunting) {
+      if (herd.grace > 0) herd.grace -= dt;
+      let anyNear = false;
       for (const a of herd.animals) {
         a.t -= dt;
         a.phase += dt * 8;
@@ -394,11 +414,15 @@ export class Animals {
         const d = Math.hypot(dx, dz);
         const p = spec.predator;
         if (d > p.notice) { a.state = 'graze'; a.moving = false; continue; }
-        if (!herd.warned) { herd.warned = true; this.onStalk?.(a); }
+        anyNear = true;
+        if (!herd.warned) { herd.warned = true; herd.grace = p.grace; this.onStalk?.(a); }
         a.yaw = Math.atan2(dx / (d || 1), dz / (d || 1));
-        if (d > p.charge) {
+        // During the grace window the pack only shadows you - back away past the
+        // notice radius and nothing ever comes of it.
+        if (d > p.charge || herd.grace > 0) {
           a.state = 'stalk';
-          this.step(a, spec.speed * 0.45, dt, true);
+          if (d > p.charge * 0.7) this.step(a, spec.speed * 0.45, dt, true);
+          else a.moving = false;
         } else if (d > p.strike) {
           a.state = 'charge';
           this.step(a, spec.speed * 1.25, dt, true);
@@ -412,6 +436,8 @@ export class Animals {
           break;              // one strike stands the whole pack down - same frame
         }
       }
+      // Everyone lost the scent: the warning re-arms only after a genuine escape.
+      if (!anyNear) { herd.warned = false; herd.grace = 0; }
       return;
     }
     if (spec.predator && !this.onFoot) herd.warned = false;

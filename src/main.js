@@ -10,7 +10,7 @@ import { Grass } from './world/grass.js';
 import { Sky, DAY_LENGTH } from './world/sky.js';
 import { Post } from './world/post.js';
 import { Weather } from './world/weather.js';
-import { Animals } from './animals/animals.js';
+import { Animals, setWolfTemper, wolfTemper, WOLF_TEMPERS } from './animals/animals.js';
 import { MarshWater } from './world/water.js';
 import { Landmarks } from './world/landmarks.js';
 import { Secrets } from './world/secrets.js';
@@ -116,6 +116,11 @@ addEventListener('keydown', (e) => {
     && Math.abs(car.speed) < 1.5) garage.toggle();
   if (e.code === 'Escape' && garage.open) garage.toggle(false);
   if (e.code === 'KeyM' && !e.repeat) hud.note(audio.toggleMute() ? 'sound off' : 'sound on', 2);
+  if (e.code === 'KeyV' && !e.repeat) {
+    const order = Object.keys(WOLF_TEMPERS);
+    const next = order[(order.indexOf(wolfTemper.name) + 1) % order.length];
+    hud.note(`wolves: ${setWolfTemper(next)}`, 3);
+  }
 });
 const post = new Post(renderer, scene, camera, QUALITY);
 controls.onCamera = () => { if (tasks.mode === 'drive') chase.cycle(); };
