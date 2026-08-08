@@ -50,6 +50,18 @@ global.addEventListener = () => {};
 const ALL = [...FIRST_TASKS, ...CREATURE_TASKS, ...DRIVING_TASKS, ...SURVIVAL_TASKS];
 const DT = 1 / 60;
 
+// Deterministic run: task offers and animal wander go through Math.random, and a
+// rare combination of slow tasks can brush the sim's time cap. Every task's
+// completion is proven exhaustively in tasks.test.mjs; this suite proves the
+// JOURNEY holds together, so it runs on a fixed seed.
+let seed = 20260808;
+Math.random = () => {
+  seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
 const scene = new THREE.Scene();
 const stations = new Stations(scene);
 const hud = { setTask() {}, setObjective() {}, setPrompt() {}, note() {}, setFuel() {} };

@@ -257,5 +257,55 @@ export function buildCarBody(spec) {
     }
   }
   g.userData.wheels = wheels;
+
+  // Interior for the dashboard camera: dash top, instrument brow, steering wheel
+  // on a column, A-pillar hints. Hidden until the camera is inside; the hull's
+  // front faces cull themselves automatically from within.
+  const interior = new THREE.Group();
+  const dashTop = { supercar: 0.62, muscle: 0.72, hatch: 0.74, rally: 0.74, van: 0.98 }[cls] ?? 0.86;
+  const dashZ = L / 2 - CABIN[cls][0] * L - 0.05;
+  const dashMat = new THREE.MeshStandardMaterial({ color: 0x1a1b1d, roughness: 0.88 });
+  const dash = new THREE.Mesh(new RoundedBoxGeometry(W * 0.86, 0.16, 0.5, 2, 0.05), dashMat);
+  dash.position.set(0, dashTop, dashZ);
+  dash.rotation.x = -0.12;
+  interior.add(dash);
+  const brow = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.1, 0.16, 2, 0.03), dashMat);
+  brow.position.set(W * 0.22, dashTop + 0.1, dashZ - 0.12);
+  interior.add(brow);
+  const dial = new THREE.Mesh(
+    new THREE.CircleGeometry(0.055, 20),
+    new THREE.MeshStandardMaterial({ color: 0xd8e4ee, emissive: 0x93b8d0, emissiveIntensity: 0.5 }),
+  );
+  dial.position.set(W * 0.22, dashTop + 0.1, dashZ - 0.035);
+  interior.add(dial);
+
+  const wheelRim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.19, 0.021, 10, 28),
+    new THREE.MeshStandardMaterial({ color: 0x232426, roughness: 0.6 }),
+  );
+  const spokeM = new THREE.MeshStandardMaterial({ color: 0x2c2d30, roughness: 0.55 });
+  const steering = new THREE.Group();
+  steering.add(wheelRim);
+  for (const a of [0, 2.1, -2.1]) {
+    const sp = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.18, 0.02), spokeM);
+    sp.position.set(Math.sin(a) * 0.09, -Math.cos(a) * 0.09, 0);
+    sp.rotation.z = -a;
+    steering.add(sp);
+  }
+  steering.position.set(W * 0.22, dashTop + 0.02, dashZ - 0.2);
+  steering.rotation.x = 0.32;
+  interior.add(steering);
+
+  const pillarM = new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.8 });
+  for (const sx of [-1, 1]) {
+    const pillar = new THREE.Mesh(new RoundedBoxGeometry(0.07, 0.55, 0.09, 2, 0.02), pillarM);
+    pillar.position.set(sx * W * 0.41, dashTop + 0.32, dashZ + 0.06);
+    pillar.rotation.x = -0.45;
+    interior.add(pillar);
+  }
+  interior.visible = false;
+  g.add(interior);
+  g.userData.interior = interior;
+  g.userData.steering = steering;
   return g;
 }

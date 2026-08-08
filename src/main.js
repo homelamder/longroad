@@ -57,7 +57,7 @@ if (QUALITY.shadows) {
 renderer.info.autoReset = false;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4200);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.28, 4200);   // near covers the dash view
 
 const sky = new Sky(scene, QUALITY);
 const terrain = new Terrain({ quality: QUALITY.terrain, textured: true, res: QUALITY.tex2k ? '2k' : '1k' });
@@ -294,6 +294,9 @@ function frame(now) {
   WIND.uStrength.value = 0.05 + weather.wind * 0.55;
 
   poseCar(game.carMesh, car);
+  if (game.carMesh.userData.interior) {
+    game.carMesh.userData.interior.visible = chase.mode === 'dash';
+  }
   game.lights.update(sky.daylight < 0.55);   // on through dawn and dusk, not just full dark
   dust.update(dt, car);
   hud.update(car, sky);

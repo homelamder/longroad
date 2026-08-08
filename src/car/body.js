@@ -46,4 +46,6 @@ export function poseCar(mesh, car) {
     hub.rotation.y = hub.userData.front ? car.steerAngle : 0;
   }
   mesh.userData.brakeMaterial.emissiveIntensity = car.braking ? 2.4 : 0.35;
+  // ~2.5 turns lock to lock, like a real column.
+  if (mesh.userData.steering) mesh.userData.steering.rotation.z = -car.steerAngle * 7.5;
 }

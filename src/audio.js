@@ -3,6 +3,12 @@
 // on the first user gesture, as browsers require.
 
 import { clamp, lerp } from './world/rng.js';
+import { asset } from './asset.js';
+
+// Recorded CC0 ambience (OpenGameArt) — looping beds crossfaded by place, hour,
+// weather and speed. If a file fails to load the synthesized layer keeps playing,
+// so the world is never silent, even offline.
+const BEDS = ['birds', 'crickets', 'stream', 'windsoft', 'windstrong', 'rain'];
 
 export class Audio {
   constructor() {
@@ -88,7 +94,45 @@ export class Audio {
     this.nextChirp = 0;
     this.nextCricket = 0;
 
+    // Load the recorded beds; each becomes a looping source behind its own gain.
+    this.beds = {};
+    for (const name of BEDS) {
+      fetch(asset(`/sfx/${name}.ogg`))
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((ab) => ctx.decodeAudioData(ab))
+        .then((buf) => {
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.loop = true;
+          const g = ctx.createGain();
+          g.gain.value = 0;
+          src.connect(g);
+          g.connect(this.master);
+          src.start();
+          this.beds[name] = g;
+        })
+        .catch(() => { /* fall back to synthesis for this layer */ });
+    }
+
     this.ready = true;
+  }
+
+  // Target level for each recorded bed given where and when you are.
+  bedTargets(biome, isNight, weather, still) {
+    const birdy = { verdant: 0.8, duskwood: 1.0, whisper: 1.0, marsh: 0.5, frostveil: 0.12 }[biome] || 0;
+    const cricketty = { verdant: 0.8, marsh: 1.0, whisper: 0.9, duskwood: 0.5 }[biome] || 0;
+    const streamy = { whisper: 0.75, marsh: 0.45 }[biome] || 0;
+    const gusty = { frostveil: 0.8, ashen: 0.55, emberfall: 0.4 }[biome] || 0.12;
+    const wet = ['rain', 'storm', 'blizzard'].includes(weather.stateName)
+      ? (weather.stateName === 'rain' ? 0.7 : 1.0) : 0;
+    return {
+      birds: (isNight ? 0 : birdy) * still * 0.5,
+      crickets: (isNight ? cricketty : 0) * still * 0.45,
+      stream: streamy * still * 0.5,
+      windsoft: (0.25 + weather.wind * 0.5) * (1 - gusty) * 0.4,
+      windstrong: (gusty * 0.6 + weather.wind * 0.5) * 0.45,
+      rain: wet * 0.6,
+    };
   }
 
   // A short songbird phrase: two to four descending chirps with pitch glides.
@@ -156,18 +200,25 @@ export class Audio {
     if (!this.ready) return;
     const speed = Math.abs(car.speed);
 
-    // The living layer, gated by place and hour, and quieter at speed — you hear
-    // the world when you slow down for it, which invites slowing down.
+    // The living layer: recorded beds crossfade by place/hour/weather, and fade
+    // with speed — you hear the world when you slow down for it.
     if (!this.muted) {
       const still = clamp(1 - speed / 20, 0, 1);
+      const targets = this.bedTargets(biome, isNight, weather, still);
+      const k = Math.min(1, dt * 1.2);
+      for (const [name, g] of Object.entries(this.beds)) {
+        g.gain.value = lerp(g.gain.value, targets[name] ?? 0, k);
+      }
+
+      // Synthesized accents only cover layers whose recording did not load.
       const t = this.ctx.currentTime;
-      const birdy = ['verdant', 'duskwood', 'whisper'].includes(biome) && !isNight;
-      const cricketty = ['verdant', 'marsh', 'whisper'].includes(biome) && isNight;
-      if (birdy && t > this.nextChirp) {
+      if (!this.beds.birds && ['verdant', 'duskwood', 'whisper'].includes(biome) && !isNight
+        && t > this.nextChirp) {
         this.chirp();
         this.nextChirp = t + 1.2 + Math.random() * (3 + 8 * (1 - still));
       }
-      if (cricketty && t > this.nextCricket) {
+      if (!this.beds.crickets && ['verdant', 'marsh', 'whisper'].includes(biome) && isNight
+        && t > this.nextCricket) {
         this.cricket();
         this.nextCricket = t + 0.4 + Math.random() * (1.5 + 5 * (1 - still));
       }
@@ -185,7 +236,8 @@ export class Audio {
     this.windGain.gain.value = lerp(this.windGain.gain.value,
       clamp((speed - 8) / 38, 0, 1) * 0.16 + weather.wind * 0.05, Math.min(1, dt * 3));
 
-    const wet = ['rain', 'storm', 'blizzard'].includes(weather.stateName)
+    // Synth rain hiss only when the recorded rain bed is unavailable.
+    const wet = !this.beds.rain && ['rain', 'storm', 'blizzard'].includes(weather.stateName)
       ? (weather.stateName === 'storm' ? 0.14 : 0.09) : 0;
     this.rainGain.gain.value = lerp(this.rainGain.gain.value, wet, Math.min(1, dt * 1.5));
   }

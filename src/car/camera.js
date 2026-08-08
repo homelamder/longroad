@@ -18,7 +18,7 @@ export class ChaseCamera {
   }
 
   cycle() {
-    this.mode = this.mode === 'chase' ? 'hood' : this.mode === 'hood' ? 'far' : 'chase';
+    this.mode = { chase: 'dash', dash: 'hood', hood: 'far', far: 'chase' }[this.mode] || 'chase';
   }
 
   // `car` here is anything with pos, forward() and optionally speed — the on-foot
@@ -30,6 +30,13 @@ export class ChaseCamera {
 
     let back, up, ahead, stiff;
     if (this.mode === 'foot') { back = 4.4; up = 2.1; ahead = 5.5; stiff = 7; }
+    else if (this.mode === 'dash') {
+      // Driver's eye: inside the cabin, rigid to the car. Eye height per class.
+      const low = car.spec && (car.spec.class === 'supercar' || car.spec.class === 'muscle');
+      back = (car.spec ? car.spec.wheelBase : 3) * 0.16;
+      up = low ? 0.98 : 1.28;
+      ahead = 16; stiff = 30;
+    }
     else if (this.mode === 'hood') { back = -0.2; up = 1.55; ahead = 14; stiff = 22; }
     else if (this.mode === 'far') { back = lerp(11, 15.5, t); up = lerp(5.2, 6.4, t); ahead = 16; stiff = 3.0; }
     else { back = lerp(7.2, 9.4, t); up = lerp(3.0, 3.7, t); ahead = 11; stiff = 4.2; }
