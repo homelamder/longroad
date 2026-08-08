@@ -73,3 +73,34 @@ assert.deepEqual(h1, h2, 'herd sites are not deterministic');
 }
 
 console.log('animals ok — herds deterministic, flee/calm behave, road stays clear');
+
+// --- the hunt ---------------------------------------------------------------
+// A wolf pack must stalk, close, and strike a walker exactly once per cooldown,
+// and must ignore the same position when the player is in the car.
+{
+  const wolves = an.spawnAt('wolf', 500, 5000, 3);
+  let strikes = 0, stalks = 0;
+  an.onStrike = () => strikes++;
+  an.onStalk = () => stalks++;
+  const walker = { x: 500, z: 5030 };
+  for (let i = 0; i < 60 * 30; i++) {
+    an.update(1 / 60, walker, 0, true);
+    if (strikes > 0) break;
+  }
+  assert.ok(stalks >= 1, 'pack never noticed the walker');
+  assert.ok(strikes === 1, `expected exactly one strike, got ${strikes}`);
+  assert.ok(wolves.cool > 0, 'no cooldown after the strike');
+
+  // Cooldown holds: 5 more simulated seconds bring no second strike.
+  for (let i = 0; i < 60 * 5; i++) an.update(1 / 60, walker, 0, true);
+  assert.equal(strikes, 1, 'pack struck again inside its cooldown');
+
+  // In the car the pack stands down entirely.
+  wolves.cool = 0;
+  let carStrikes = 0;
+  an.onStrike = () => carStrikes++;
+  for (let i = 0; i < 60 * 10; i++) an.update(1 / 60, walker, 0, false);
+  assert.equal(carStrikes, 0, 'wolves attacked a car');
+  an.release(wolves);
+  console.log('hunt ok — stalk, one strike, cooldown, cars ignored');
+}

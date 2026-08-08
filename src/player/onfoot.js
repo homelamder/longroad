@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { asset } from '../asset.js';
 import { elevation } from '../world/terrain.js';
 import { obstaclesNear } from '../world/scatter.js';
-import { clamp, lerp } from '../world/rng.js';
+import { clamp, lerp, smoothstep } from '../world/rng.js';
 
 // Walk mode. Exists because six of the sixteen tasks happen out of the car — you do
 // not feed goats or light a fire through a windscreen. Tank-style controls on
@@ -58,8 +58,16 @@ export class OnFoot {
       for (const clip of gltf.animations) {
         this.actions[clip.name.replace(/^.*\|/, '')] = this.mixer.clipAction(clip);
       }
-      const idle = this.actions.Idle || Object.values(this.actions)[0];
-      if (idle) { idle.play(); this.activeAction = idle; }
+      // Locomotion runs as a weight blend, not a clip switch: Idle, Walk and Run
+      // all play forever and the update mixes them. Switching clips restarts
+      // them mid-stride, which is exactly the pop the blend removes.
+      for (const n of ['Idle', 'Walk', 'Run']) {
+        if (this.actions[n]) {
+          this.actions[n].play();
+          this.actions[n].setEffectiveWeight(n === 'Idle' ? 1 : 0);
+        }
+      }
+      this.weights = { Idle: 1, Walk: 0, Run: 0 };
       this.human = human;
     }, undefined, () => { /* capsule fallback stands */ });
     this._f = new THREE.Vector3();
@@ -78,13 +86,36 @@ export class OnFoot {
 
   forward(out = this._f) { return out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
 
-  // Crossfade helper: switch the active clip only when the target changes.
-  play(name) {
-    if (!this.actions || !this.actions[name] || this.activeAction === this.actions[name]) return;
-    const next = this.actions[name];
-    next.reset().fadeIn(0.18).play();
-    if (this.activeAction) this.activeAction.fadeOut(0.18);
-    this.activeAction = next;
+  // 1D locomotion blend: speed in [0,1] maps to Idle/Walk/Run weights, and the
+  // clip playback rate follows real ground speed so the feet stop sliding.
+  blend(sp, groundSpeed, dt) {
+    const runW = smoothstep(0.55, 0.92, sp);
+    const walkW = smoothstep(0.03, 0.3, sp) * (1 - runW);
+    const idleW = Math.max(0, 1 - walkW - runW);
+    const suppress = this.oneShotT > 0 ? 0.15 : 1;   // one-shots take the body over
+    const targets = { Idle: idleW * suppress, Walk: walkW * suppress, Run: runW * suppress };
+    const k = Math.min(1, dt * 7);
+    for (const n of ['Idle', 'Walk', 'Run']) {
+      const a = this.actions[n];
+      if (!a) continue;
+      this.weights[n] += (targets[n] - this.weights[n]) * k;
+      a.setEffectiveWeight(this.weights[n]);
+    }
+    // Quaternius Walk covers ~1.5 m/s at timeScale 1, Run ~3.6. Matching rate to
+    // ground speed is what makes contact look planted at every pace.
+    if (this.actions.Walk) this.actions.Walk.timeScale = clamp(groundSpeed / 1.5, 0.6, 2.0);
+    if (this.actions.Run) this.actions.Run.timeScale = clamp(groundSpeed / 3.6, 0.7, 1.7);
+  }
+
+  // Knocked back by wildlife: a shove away from the attacker, a flinch, and a
+  // beat of dead input. Forgiving by design - lost footing, never lost progress.
+  stagger(fromX, fromZ) {
+    const dx = this.pos.x - fromX, dz = this.pos.z - fromZ;
+    const d = Math.hypot(dx, dz) || 1;
+    this.staggerT = 0.9;
+    this.staggerVX = (dx / d) * 5.5;
+    this.staggerVZ = (dz / d) * 5.5;
+    this.playOnce('Jump');
   }
 
   // One-shot overlay (Working, Jump): plays over the locomotion blend, then hands
@@ -107,10 +138,23 @@ export class OnFoot {
       const fwd = (input.throttle || 0) - (input.brake || 0);
       const strafe = input.steer || 0;
       if (Math.abs(fwd) > 0.02 || Math.abs(strafe) > 0.02) {
-        this.yaw = camYaw + Math.atan2(strafe, fwd >= 0 ? Math.max(fwd, 0.001) : fwd);
+        const want = camYaw + Math.atan2(strafe, fwd >= 0 ? Math.max(fwd, 0.001) : fwd);
+        // Shortest-arc turn at a finite rate: a 180 flip is a pivot, not a teleport.
+        let d = ((want - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        this.yaw += d * Math.min(1, dt * 10);
       }
     } else {
       this.yaw -= (input.steer || 0) * TURN * dt;
+    }
+
+    // Staggered: an animal knocked us back. Input is dead while we recover.
+    if (this.staggerT > 0) {
+      this.staggerT -= dt;
+      this.pos.x += this.staggerVX * dt;
+      this.pos.z += this.staggerVZ * dt;
+      this.staggerVX *= Math.exp(-3 * dt);
+      this.staggerVZ *= Math.exp(-3 * dt);
+      input = { throttle: 0, brake: 0, steer: 0 };
     }
 
     const go = clamp((input.throttle || 0) - (input.brake || 0) * 0.55, -0.55, 1);
@@ -163,10 +207,10 @@ export class OnFoot {
       if (this.oneShotT > 0) {
         this.oneShotT -= dt;
         if (this.oneShotT <= 0 && this.oneShot) { this.oneShot.fadeOut(0.12); this.oneShot = null; }
-      } else {
-        const sp = Math.abs(this.moving || 0) * (input.sprint ? 1.9 : 1);
-        this.play(sp > 0.85 ? 'Run' : sp > 0.06 ? 'Walk' : 'Idle');
       }
+      // Walking peaks the blend at the Walk pole (~0.5); sprinting pushes to Run.
+      const mv = Math.abs(this.moving || 0);
+      this.blend(mv * (input.sprint ? 1 : 0.52), WALK * (input.sprint ? 1.9 : 1) * mv, dt);
       this.mixer.update(dt);
     }
 

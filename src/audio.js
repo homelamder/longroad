@@ -210,6 +210,30 @@ export class Audio {
     o.start(t0); o.stop(t0 + pulses * 0.042 + 0.05);
   }
 
+  // A low predator growl: detuned saws through a tight lowpass. Plays when a
+  // pack notices you and again, harder, when one lunges.
+  growl(intensity = 1) {
+    if (!this.ready || this.muted) return;
+    const ctx = this.ctx;
+    const t0 = ctx.currentTime;
+    const g = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 260;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.16 * intensity, t0 + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.9);
+    lp.connect(g); g.connect(this.master);
+    for (const det of [0, 11]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(58, t0);
+      o.frequency.linearRampToValueAtTime(44, t0 + 0.8);
+      o.detune.value = det;
+      o.connect(lp); o.start(t0); o.stop(t0 + 1);
+    }
+  }
+
   // A soft two-note chime for completions and finds.
   chime(kind = 'done') {
     if (!this.ready || this.muted) return;

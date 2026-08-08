@@ -138,6 +138,12 @@ const tasks = new TaskManager(
 const ending = new Ending({ hud, sky, weather, fuel });
 const audio = new Audio();
 const secrets = new Secrets(scene, { sky, weather, hud, audio });
+animals.onStalk = () => { hud.note('eyes in the treeline…', 4); audio.growl(0.5); };
+animals.onStrike = (a) => {
+  foot.stagger(a.x, a.z);
+  hud.note('the wolf got you — the pack stands off, for now', 5);
+  audio.growl(1);
+};
 const save = new Save({ car, fuel, sky, stations, ending });
 const resumed = save.restore();
 if (resumed) chase.snap(car);
@@ -300,7 +306,7 @@ function frame(now) {
   // Reflections dim with the daylight or the night would glow like a showroom.
   scene.environmentIntensity = 0.08 + sky.daylight * 0.75;
   weather.update(dt, camera.position, focus.z);
-  animals.update(dt, focus, driving ? Math.abs(car.speed) : foot.moving * 3.2);
+  animals.update(dt, focus, driving ? Math.abs(car.speed) : foot.moving * 3.2, !driving);
   water.update(dt);
   landmarks.update(dt, focus);
   secrets.update(dt, focus);

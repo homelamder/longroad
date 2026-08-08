@@ -106,13 +106,21 @@ export const SPECIES = {
   },
 };
 
+SPECIES.wolf = {
+  geo: () => buildBody({ body: [0.42, 0.5, 1.05], head: [0.24, 0.26, 0.38], legs: 0.58, tail: 0.34, colour: 0x8c8a86, dark: 0x4a4642 }),
+  speed: 8.5, flee: 0, calm: 4, herd: [2, 4], wander: 14,
+  // The hunt: notice a walker at 55 m, close to 15, lunge inside 2.3, then the
+  // pack stands down for a while. Drivers are never prey.
+  predator: { notice: 55, charge: 15, strike: 2.3, cooldown: 14 },
+};
+
 // Which species live where, with herd-site density per km of road.
 const FAUNA = {
   verdant: [['goat', 3], ['sheep', 3], ['deer', 1]],
-  duskwood: [['elk', 2], ['deer', 2], ['fox', 1]],
+  duskwood: [['elk', 2], ['deer', 2], ['fox', 1], ['wolf', 1]],
   emberfall: [['fox', 2]],
   whisper: [['monkey', 3], ['tapir', 1]],
-  frostveil: [['goat', 2]],
+  frostveil: [['goat', 2], ['wolf', 1]],
   marsh: [['heron', 3], ['deer', 1]],
   ashen: [],
 };
@@ -132,6 +140,9 @@ const CLIP_WANTS = {
   walk: ['Walk', 'Idle'],
   graze: ['Eating', 'Idle_Headlow', 'Idle'],
   idle: ['Idle'],
+  stalk: ['Walk', 'Idle'],
+  charge: ['Gallop', 'Walk', 'Idle'],
+  attack: ['Attack', 'Attack_Headbutt', 'Idle'],
 };
 
 const SITE_SPACING = 210;          // candidate herd sites every N metres of road
@@ -245,7 +256,8 @@ export class Animals {
     if (i >= 0) this.tasked.splice(i, 1);
   }
 
-  update(dt, playerPos, playerSpeed) {
+  update(dt, playerPos, playerSpeed, onFoot = false) {
+    this.onFoot = onFoot;
     const centerI = Math.round(playerPos.z / SITE_SPACING);
     const span = Math.ceil(ACTIVE_RANGE / SITE_SPACING);
 
@@ -329,7 +341,12 @@ export class Animals {
     rig.root.rotation.y = a.yaw;
     rig.root.scale.setScalar(a.scale);
 
-    const state = a.state === 'flee' ? 'flee' : a.moving ? 'walk' : a.state === 'graze' ? 'graze' : 'idle';
+    const state = a.attackT > 0 ? 'attack'
+      : a.state === 'charge' ? 'charge'
+      : a.state === 'stalk' ? 'stalk'
+      : a.state === 'flee' ? 'flee'
+      : a.moving ? 'walk'
+      : a.state === 'graze' ? 'graze' : 'idle';
     const want = CLIP_WANTS[state].find((n) => rig.actions[n]);
     if (want && rig.current !== want) {
       const next = rig.actions[want];
@@ -358,11 +375,47 @@ export class Animals {
         scale: 0.85 + hash2(site.i * 13 + k, 131) * 0.3,
       });
     }
-    return { ...site, spec, animals, spooked: 0 };
+    return { ...site, spec, animals, spooked: 0, cool: 0, warned: false };
   }
 
   behave(herd, dt, playerPos, playerSpeed) {
     const spec = herd.spec;
+
+    // Predators hunt a player on foot. In the car you are a machine - too big,
+    // too loud, not prey - and the pack goes back to being scenery.
+    if (spec.predator && herd.cool > 0) herd.cool -= dt;
+    const hunting = spec.predator && this.onFoot && !(herd.cool > 0);
+    if (hunting) {
+      for (const a of herd.animals) {
+        a.t -= dt;
+        a.phase += dt * 8;
+        if (a.attackT > 0) { a.attackT -= dt; a.moving = false; continue; }
+        const dx = playerPos.x - a.x, dz = playerPos.z - a.z;
+        const d = Math.hypot(dx, dz);
+        const p = spec.predator;
+        if (d > p.notice) { a.state = 'graze'; a.moving = false; continue; }
+        if (!herd.warned) { herd.warned = true; this.onStalk?.(a); }
+        a.yaw = Math.atan2(dx / (d || 1), dz / (d || 1));
+        if (d > p.charge) {
+          a.state = 'stalk';
+          this.step(a, spec.speed * 0.45, dt, true);
+        } else if (d > p.strike) {
+          a.state = 'charge';
+          this.step(a, spec.speed * 1.25, dt, true);
+        } else {
+          // The strike: one hit, then the whole pack is satisfied and stands off.
+          a.state = 'attack';
+          a.attackT = 1.0;
+          herd.cool = p.cooldown;
+          herd.warned = false;
+          this.onStrike?.(a);
+          break;              // one strike stands the whole pack down - same frame
+        }
+      }
+      return;
+    }
+    if (spec.predator && !this.onFoot) herd.warned = false;
+
     for (const a of herd.animals) {
       a.t -= dt;
       a.phase += dt * 8;
