@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneRig } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { asset } from '../asset.js';
 import { JOURNEY, biomeAt, mixField } from '../world/biomes.js';
 import { nearest, pointAt } from '../world/road.js';
 import { elevation } from '../world/terrain.js';
@@ -114,15 +117,66 @@ const FAUNA = {
   ashen: [],
 };
 
+// Rigged Quaternius animals (CC0) that replace the instanced blocks when they
+// load: species id -> [glb name, real-world height in metres]. Goats, monkeys,
+// tapirs and herons have no model in the packs and stay procedural.
+const MODELS = {
+  sheep: ['sheep', 1.05], deer: ['deer', 1.5], elk: ['stag', 1.95],
+  wolf: ['wolf', 1.1], fox: ['fox', 0.65],
+};
+
+// Preference order per behaviour state; the sheep rig only ships Idle and Jump,
+// so every want-list ends in Idle.
+const CLIP_WANTS = {
+  flee: ['Gallop', 'Jump', 'Idle'],
+  walk: ['Walk', 'Idle'],
+  graze: ['Eating', 'Idle_Headlow', 'Idle'],
+  idle: ['Idle'],
+};
+
 const SITE_SPACING = 210;          // candidate herd sites every N metres of road
 const ACTIVE_RANGE = 420;          // herds exist within this range of the player
 const CAP = 96;                    // hard ceiling on live animals per species
 
 export class Animals {
   constructor(scene) {
+    this.scene = scene;
     this.meshes = {};
     this.herds = new Map();        // siteKey -> herd
     this.tasked = [];              // herds owned by an active task
+    this.models = {};              // species -> { template, clips }
+    this.rigs = new Map();         // live animal -> its skinned clone
+    this.frame = 0;
+
+    // Browser only (import.meta.env is the vite tell): node tests keep the
+    // instanced fallback, and so does any player whose fetch fails.
+    if (import.meta.env) {
+      const loader = new GLTFLoader();
+      for (const [species, [file, height]] of Object.entries(MODELS)) {
+        loader.load(asset(`/models/${file}.glb`), (gltf) => {
+          const inner = gltf.scene;
+          const box = new THREE.Box3().setFromObject(inner);
+          const h = box.max.y - box.min.y || 1;
+          inner.scale.setScalar(height / h);
+          inner.rotation.y = Math.PI;                  // fbx2gltf authors facing -Z
+          inner.traverse((o) => {
+            if (o.isMesh) {
+              o.castShadow = true;
+              o.frustumCulled = false;                 // skinned bounds lag the pose
+              const fix = (m) => new THREE.MeshStandardMaterial({
+                color: m.color ? m.color.clone() : 0xffffff, roughness: 0.9, metalness: 0,
+              });
+              o.material = Array.isArray(o.material) ? o.material.map(fix) : fix(o.material);
+            }
+          });
+          this.models[species] = {
+            template: inner,
+            clips: gltf.animations.map((c) => { c.name = c.name.replace(/^.*\|/, ''); return c; }),
+          };
+          this.meshes[species].visible = false;        // clones render this species now
+        }, undefined, () => { /* instanced fallback stands */ });
+      }
+    }
     for (const [id, spec] of Object.entries(SPECIES)) {
       const m = new THREE.InstancedMesh(spec.geo(), new THREE.MeshStandardMaterial({
         vertexColors: true, roughness: 0.9, metalness: 0,
@@ -215,11 +269,17 @@ export class Animals {
     }
     for (const herd of this.tasked) this.behave(herd, dt, playerPos, playerSpeed);
 
-    // Write instances.
+    // Write instances — or pose rigged clones for species whose model arrived.
+    this.frame++;
     const counts = {};
     for (const id in this.meshes) counts[id] = 0;
     for (const herd of [...this.herds.values(), ...this.tasked]) {
       if (!herd) continue;
+      const model = this.models[herd.species];
+      if (model) {
+        for (const a of herd.animals) this.poseRig(model, a, dt);
+        continue;
+      }
       const mesh = this.meshes[herd.species];
       for (const a of herd.animals) {
         if (counts[herd.species] >= CAP) break;
@@ -238,6 +298,48 @@ export class Animals {
       this.meshes[id].count = counts[id];
       this.meshes[id].instanceMatrix.needsUpdate = true;
     }
+
+    // Retire clones whose animal left the world this frame.
+    for (const [a, rig] of this.rigs) {
+      if (rig.used !== this.frame) {
+        this.scene.remove(rig.root);
+        this.rigs.delete(a);
+      }
+    }
+  }
+
+  // One skinned clone per live animal, driven by the same behaviour sim that
+  // moves the instances. State picks the clip: grazing animals actually eat,
+  // fleeing ones actually gallop.
+  poseRig(model, a, dt) {
+    let rig = this.rigs.get(a);
+    if (!rig) {
+      const root = new THREE.Group();
+      const body = cloneRig(model.template);
+      root.add(body);
+      const mixer = new THREE.AnimationMixer(body);
+      const actions = {};
+      for (const clip of model.clips) actions[clip.name] = mixer.clipAction(clip);
+      rig = { root, mixer, actions, current: null };
+      this.scene.add(root);
+      this.rigs.set(a, rig);
+    }
+    rig.used = this.frame;
+    rig.root.position.set(a.x, a.y, a.z);
+    rig.root.rotation.y = a.yaw;
+    rig.root.scale.setScalar(a.scale);
+
+    const state = a.state === 'flee' ? 'flee' : a.moving ? 'walk' : a.state === 'graze' ? 'graze' : 'idle';
+    const want = CLIP_WANTS[state].find((n) => rig.actions[n]);
+    if (want && rig.current !== want) {
+      const next = rig.actions[want];
+      next.reset().fadeIn(0.16).play();
+      // The sheep gallops on its Idle clip: double time sells the panic.
+      next.timeScale = state === 'flee' && want === 'Idle' ? 2.2 : 1;
+      if (rig.current) rig.actions[rig.current].fadeOut(0.16);
+      rig.current = want;
+    }
+    rig.mixer.update(dt);
   }
 
   spawn(site) {
