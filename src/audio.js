@@ -80,7 +80,55 @@ export class Audio {
     rainF.connect(this.rainGain);
     this.rainGain.connect(this.master);
 
+    // Ambience bus for the living world: birdsong and crickets are synthesized on
+    // schedule, so the forest sounds inhabited without a single recorded sample.
+    this.ambGain = ctx.createGain();
+    this.ambGain.gain.value = 0.5;
+    this.ambGain.connect(this.master);
+    this.nextChirp = 0;
+    this.nextCricket = 0;
+
     this.ready = true;
+  }
+
+  // A short songbird phrase: two to four descending chirps with pitch glides.
+  chirp() {
+    const ctx = this.ctx;
+    const t0 = ctx.currentTime;
+    const base = 2200 + Math.random() * 1800;
+    const notes = 2 + (Math.random() * 3 | 0);
+    for (let i = 0; i < notes; i++) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      const t = t0 + i * (0.09 + Math.random() * 0.06);
+      o.frequency.setValueAtTime(base * (1 + Math.random() * 0.2), t);
+      o.frequency.exponentialRampToValueAtTime(base * (0.7 + Math.random() * 0.15), t + 0.07);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.05 + Math.random() * 0.04, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+      o.connect(g); g.connect(this.ambGain);
+      o.start(t); o.stop(t + 0.12);
+    }
+  }
+
+  // One cricket burst: a fast trill on a high carrier.
+  cricket() {
+    const ctx = this.ctx;
+    const t0 = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = 4200 + Math.random() * 600;
+    g.gain.value = 0;
+    const pulses = 6 + (Math.random() * 6 | 0);
+    for (let i = 0; i < pulses; i++) {
+      const t = t0 + i * 0.042;
+      g.gain.setValueAtTime(0.028, t);
+      g.gain.setValueAtTime(0, t + 0.02);
+    }
+    o.connect(g); g.connect(this.ambGain);
+    o.start(t0); o.stop(t0 + pulses * 0.042 + 0.05);
   }
 
   // A soft two-note chime for completions and finds.
@@ -104,9 +152,26 @@ export class Audio {
     });
   }
 
-  update(dt, car, weather, driving) {
+  update(dt, car, weather, driving, biome = 'verdant', isNight = false) {
     if (!this.ready) return;
     const speed = Math.abs(car.speed);
+
+    // The living layer, gated by place and hour, and quieter at speed — you hear
+    // the world when you slow down for it, which invites slowing down.
+    if (!this.muted) {
+      const still = clamp(1 - speed / 20, 0, 1);
+      const t = this.ctx.currentTime;
+      const birdy = ['verdant', 'duskwood', 'whisper'].includes(biome) && !isNight;
+      const cricketty = ['verdant', 'marsh', 'whisper'].includes(biome) && isNight;
+      if (birdy && t > this.nextChirp) {
+        this.chirp();
+        this.nextChirp = t + 1.2 + Math.random() * (3 + 8 * (1 - still));
+      }
+      if (cricketty && t > this.nextCricket) {
+        this.cricket();
+        this.nextCricket = t + 0.4 + Math.random() * (1.5 + 5 * (1 - still));
+      }
+    }
 
     // Engine pitch from speed, load from throttle-ish accel; idles at a putter.
     const revs = driving ? 55 + speed * 3.6 : 0;

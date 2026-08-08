@@ -273,7 +273,7 @@ function buildChunk(cx, cz, seg) {
 }
 
 export class Terrain {
-  constructor({ quality = 'high', textured = false } = {}) {
+  constructor({ quality = 'high', textured = false, res = '1k' } = {}) {
     this.lods = quality === 'low' ? LOD_LOW : LOD_HIGH;
     this.radius = this.lods[this.lods.length - 1].ring;
     this.group = new THREE.Group();
@@ -281,7 +281,7 @@ export class Terrain {
     // textured only in the browser: TextureLoader needs a DOM, and the node tests
     // construct Terrain for streaming logic alone.
     this.material = textured
-      ? makeSplatMaterial(loadSplatTextures())
+      ? makeSplatMaterial(loadSplatTextures(res))
       : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0.0 });
     this.chunks = new Map();
     this.queue = [];

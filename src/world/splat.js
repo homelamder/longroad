@@ -22,19 +22,19 @@ const TEX = [
 // tiling is not obvious from the chase camera.
 const SCALE = { grass: 7, rock: 11, snow: 9, soil: 6, sand: 8 };
 
-export function loadSplatTextures(base = '') {
+export function loadSplatTextures(res = '1k') {
   const loader = new THREE.TextureLoader();
   const load = (url, srgb) => {
-    const t = loader.load(asset(base + url));
+    const t = loader.load(asset(url));
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 4;
+    t.anisotropy = 8;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };
   const out = {};
   for (const [key, path] of TEX) {
-    out[key] = load(`${path}_diffuse_1k.jpg`, true);
-    out[key + 'N'] = load(`${path}_nor_gl_1k.jpg`, false);
+    out[key] = load(`${path}_diffuse_${res}.jpg`, true);
+    out[key + 'N'] = load(`${path}_nor_gl_${res}.jpg`, false);
   }
   return out;
 }

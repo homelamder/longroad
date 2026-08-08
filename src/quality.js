@@ -4,15 +4,17 @@
 const TIERS = {
   ultra: {
     name: 'ultra',
-    terrain: 'high', shadows: 2048, shadowRange: 150,
-    scatterRings: 3, scatterDensity: 1.0, grassRadius: 108, grassBlades: 62000,
+    terrain: 'high', shadows: 4096, shadowRange: 230,
+    scatterRings: 4, scatterDensity: 1.3, grassRadius: 150, grassBlades: 95000,
     bloom: true, motionBlur: true, smaa: true, pixelRatio: 2,
+    tex2k: true, gtao: true,
   },
   high: {
     name: 'high',
-    terrain: 'high', shadows: 2048, shadowRange: 140,
-    scatterRings: 3, scatterDensity: 0.8, grassRadius: 90,  grassBlades: 46000,
+    terrain: 'high', shadows: 2048, shadowRange: 160,
+    scatterRings: 3, scatterDensity: 0.9, grassRadius: 100, grassBlades: 52000,
     bloom: true, motionBlur: true, smaa: true, pixelRatio: 2,
+    tex2k: true, gtao: false,
   },
   medium: {
     name: 'medium',
@@ -51,9 +53,9 @@ function probe() {
   if (/swiftshader|llvmpipe|software|microsoft basic/i.test(renderer)) return TIERS.medium;
 
   if (coarse) return mem >= 6 && cores >= 8 ? TIERS.medium : TIERS.low;
-  if (cores >= 12 && mem >= 8) return TIERS.ultra;
-  if (cores >= 6) return TIERS.high;
-  return TIERS.medium;
+  // Desktop defaults straight to ultra — this build targets the player's own PC;
+  // the runtime meter still demotes anything that genuinely cannot keep up.
+  return cores >= 6 ? TIERS.ultra : TIERS.high;
 }
 
 export const QUALITY = probe();

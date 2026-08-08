@@ -89,7 +89,7 @@ const tasksSeen = new Set();
 let taskSteps = 0;
 let target = null;                  // station currently being pulled into
 
-const MAX_SIM = 5400;               // 90 minutes of sim time, hard stop
+const MAX_SIM = 9000;               // 150 sim-minutes: the brain sometimes rolls several slow tasks
 let lastLog = 0;
 while (car.along < ROAD_LENGTH - 60 && simSeconds < MAX_SIM) {
   if (process.env.PT_DEBUG && simSeconds - lastLog > 120) {

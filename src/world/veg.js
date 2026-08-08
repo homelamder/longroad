@@ -81,6 +81,9 @@ function normalize({ geo, mats }, height) {
   return { geo, mats };
 }
 
+// One clock drives every leaf in the world.
+export const WIND = { uTime: { value: 0 }, uStrength: { value: 0.16 } };
+
 // Rebuild ez-tree's materials as clean MeshStandardMaterials that keep the maps.
 // NOT optional: ez-tree's own leaf/bark materials replace the whole vertex shader
 // for wind sway, and that shader has no instancing support — instanced canopies
@@ -89,7 +92,7 @@ function tuneTreeMaterials(merged) {
   merged.mats = merged.mats.map((m) => {
     const leafy = m.name === 'leaves' || m.transparent || m.alphaTest > 0;
     if (m.map) m.map.anisotropy = 4;
-    return new THREE.MeshStandardMaterial({
+    const out = new THREE.MeshStandardMaterial({
       map: m.map || null,
       color: m.color ? m.color.clone() : 0xffffff,
       roughness: 0.85,
@@ -99,6 +102,32 @@ function tuneTreeMaterials(merged) {
       // other is both slow and wrong from most angles.
       ...(leafy ? { alphaTest: 0.5, transparent: false } : {}),
     });
+    if (leafy) {
+      // Gentle canopy sway. Chunk-patched onto three's own shader so instancing
+      // keeps working — the exact failure ez-tree's stock materials had.
+      out.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = WIND.uTime;
+        shader.uniforms.uStrength = WIND.uStrength;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+            uniform float uTime;
+            uniform float uStrength;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+            {
+              float h = clamp(transformed.y / 10.0, 0.0, 1.2);
+              vec2 seed = vec2(0.0);
+              #ifdef USE_INSTANCING
+                seed = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
+              #endif
+              float sway = sin(uTime * 1.3 + seed.x * 0.05 + seed.y * 0.07)
+                + 0.4 * sin(uTime * 3.1 + seed.x * 0.31);
+              transformed.x += sway * h * uStrength;
+              transformed.z += sway * h * uStrength * 0.6;
+            }`);
+      };
+      out.customProgramCacheKey = () => 'veg-wind';
+    }
+    return out;
   });
 }
 

@@ -89,6 +89,7 @@ const browser = await launch({
 
 const errors = [];
 const page = await browser.newPage();
+if (process.env.TIER) await page.evaluateOnNewDocument((t) => localStorage.setItem('lr.quality', t), process.env.TIER);
 await page.setViewport({ width: 1100, height: 560, deviceScaleFactor: 1 });
 // Chrome suspends requestAnimationFrame on background tabs, which freezes the game
 // loop and every animation with it. This is per page and is not optional.

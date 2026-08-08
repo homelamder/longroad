@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { clamp, lerp } from './rng.js';
 
 // Grade, vignette and speed blur in one pass. Three cheap things that between them
@@ -84,6 +85,14 @@ export class Post {
     ));
     this.composer.addPass(new RenderPass(scene, camera));
 
+    if (quality.gtao) {
+      // Ground-truth ambient occlusion: contact shading under the car, between
+      // rocks, inside tree canopies. The single biggest "grounded" cue.
+      this.gtao = new GTAOPass(scene, camera, size.x, size.y);
+      this.gtao.output = GTAOPass.OUTPUT.Default;
+      this.composer.addPass(this.gtao);
+    }
+
     if (quality.bloom) {
       // Threshold sits ABOVE the Preetham sky's HDR range on purpose: bloom is for
       // the sun disc, headlights and fires — not for blooming the entire sky over
@@ -107,6 +116,7 @@ export class Post {
   setSize(w, h) {
     this.composer.setSize(w, h);
     this.bloom?.setSize(w, h);
+    this.gtao?.setSize(w, h);
   }
 
   // tint/lift come from the region so each one has its own colour signature; blur

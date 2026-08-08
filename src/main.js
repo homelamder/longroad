@@ -4,7 +4,7 @@ import { QUALITY, QualityMeter, setQuality, TIER_NAMES } from './quality.js';
 import { Terrain, elevation } from './world/terrain.js';
 import { buildRoadMesh, pointAt, nearest, ROAD_LENGTH } from './world/road.js';
 import { Scatter } from './world/scatter.js';
-import { loadVegetation } from './world/veg.js';
+import { loadVegetation, WIND } from './world/veg.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { Grass } from './world/grass.js';
 import { Sky, DAY_LENGTH } from './world/sky.js';
@@ -18,6 +18,7 @@ import { Ending } from './game/ending.js';
 import { Save } from './game/save.js';
 import { Audio } from './audio.js';
 import { JOURNEY, biomeAt } from './world/biomes.js';
+import { clamp } from './world/rng.js';
 import { Car, DEFAULT_CAR } from './car/physics.js';
 import { poseCar, addHeadlights } from './car/body.js';
 import { buildCarBody } from './car/generator.js';
@@ -59,7 +60,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 4200);
 
 const sky = new Sky(scene, QUALITY);
-const terrain = new Terrain({ quality: QUALITY.terrain, textured: true });
+const terrain = new Terrain({ quality: QUALITY.terrain, textured: true, res: QUALITY.tex2k ? '2k' : '1k' });
 
 // Grow the forest before first frame — realistic trees are generated, not shipped.
 document.getElementById('boot-status').textContent = 'growing the forest';
@@ -77,7 +78,7 @@ const grass = new Grass({ quality: QUALITY });
 scene.add(terrain.group);
 scene.add(scatter.group);
 scene.add(grass.mesh);
-scene.add(buildRoadMesh());
+scene.add(buildRoadMesh(QUALITY.tex2k ? '2k' : '1k'));
 
 const weather = new Weather(scene);
 const animals = new Animals(scene);
@@ -285,10 +286,12 @@ function frame(now) {
   ending.track(dt, car, sky);
   ending.update(car, garage);
   save.update(dt);
-  audio.update(dt, car, weather, driving);
+  audio.update(dt, car, weather, driving, biomeAt(clamp(focus.z, 0, JOURNEY)).a.id, sky.isNight);
   sky.visibility = weather.vis;
   car.weatherGrip = weather.grip;
   grass.setWind(weather.wind);
+  WIND.uTime.value += dt;
+  WIND.uStrength.value = 0.05 + weather.wind * 0.55;
 
   poseCar(game.carMesh, car);
   game.lights.update(sky.daylight < 0.55);   // on through dawn and dusk, not just full dark

@@ -118,10 +118,10 @@ const FLORA = {
 const FAR_OF = { pineA: 'pineFar', pineB: 'pineFar', oakA: 'oakFar', ashA: 'oakFar' };
 
 const CAP = {
-  pineA: 700, pineB: 500, oakA: 600, ashA: 400, aspenA: 260, bushA: 900, bushB: 700,
-  pineFar: 1600, oakFar: 1400,
-  boulder: 2200, boulderB: 1400, stump: 300, deadTrunk: 500, quiver: 320,
-  reed: 14000, fern: 8000,
+  pineA: 1100, pineB: 800, oakA: 900, ashA: 600, aspenA: 400, bushA: 1400, bushB: 1100,
+  pineFar: 2600, oakFar: 2200,
+  boulder: 3200, boulderB: 2000, stump: 450, deadTrunk: 750, quiver: 480,
+  reed: 20000, fern: 12000,
 };
 
 // Trees thin far more aggressively than filler — the far LOD carries the horizon.

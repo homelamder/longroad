@@ -175,7 +175,7 @@ export function pointAt(along) {
 // Photographic asphalt (PolyHaven asphalt_02, CC0) with the lane markings painted
 // onto the diffuse in a canvas once the photo arrives. Until then the canvas shows
 // plain dark asphalt, so there is no pop from untextured to textured.
-function asphaltTexture() {
+function asphaltTexture(res) {
   const W = 1024, H = 1024;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -204,13 +204,13 @@ function asphaltTexture() {
     g.globalAlpha = 1;
     tex.needsUpdate = true;
   };
-  img.src = asset('/tex/asphalt_02_diffuse_1k.jpg');
+  img.src = asset(`/tex/asphalt_02_diffuse_${res}.jpg`);
   return tex;
 }
 
 // The ribbon is four vertices per cross-section: shoulder, tarmac, tarmac, shoulder.
 // Shoulders sit slightly lower so the road reads as laid on the ground, not floating.
-export function buildRoadMesh() {
+export function buildRoadMesh(res = '1k') {
   const n = samples.length;
   const pos = new Float32Array(n * 4 * 3);
   const uv = new Float32Array(n * 4 * 2);
@@ -263,10 +263,10 @@ export function buildRoadMesh() {
     return t;
   };
   const mat = new THREE.MeshStandardMaterial({
-    map: asphaltTexture(),
-    normalMap: rep(loader.load(asset('/tex/asphalt_02_nor_gl_1k.jpg'))),
+    map: asphaltTexture(res),
+    normalMap: rep(loader.load(asset(`/tex/asphalt_02_nor_gl_${res}.jpg`))),
     normalScale: new THREE.Vector2(0.7, 0.7),
-    roughnessMap: rep(loader.load(asset('/tex/asphalt_02_rough_1k.jpg'))),
+    roughnessMap: rep(loader.load(asset(`/tex/asphalt_02_rough_${res}.jpg`))),
     vertexColors: true,
     roughness: 1.0,
     metalness: 0.0,
