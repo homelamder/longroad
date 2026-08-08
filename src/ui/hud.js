@@ -25,7 +25,7 @@ export class Hud {
       <div class="hud-speed"><b>0</b><span>km/h</span></div>
       <div class="hud-prompt"><kbd>E</kbd><span></span></div>
       <div class="hud-note" aria-live="polite"></div>
-      <div class="hud-hint">W/S drive · A/D steer · Space handbrake · E interact · G garage · C camera · R recover · M sound · V wolves</div>`;
+      <div class="hud-hint">W/S drive · A/D steer · Space handbrake · E interact · G garage · C camera · R recover · M sound · V predators</div>`;
     root.appendChild(el);
     this.name = el.querySelector('.hud-region-name');
     this.bar = el.querySelector('.hud-progress i');

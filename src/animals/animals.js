@@ -115,6 +115,15 @@ export const WOLF_TEMPERS = {
   wild: { notice: 55, charge: 15, strike: 2.3, cooldown: 14, grace: 1.5 },
 };
 
+// Bears are territorial, not pack hunters: they notice later, warn longer, and
+// hold a grudge cooldown twice the wolves' - one swat and the valley is yours
+// again for a long while.
+export const BEAR_TEMPERS = {
+  off: null,
+  calm: { notice: 26, charge: 12, strike: 2.6, cooldown: 90, grace: 6 },
+  wild: { notice: 40, charge: 14, strike: 2.6, cooldown: 30, grace: 2.5 },
+};
+
 const storedTemper = typeof localStorage !== 'undefined' && localStorage.getItem('lr.wolves');
 export const wolfTemper = { name: WOLF_TEMPERS[storedTemper] !== undefined ? storedTemper : 'calm' };
 
@@ -122,6 +131,7 @@ export function setWolfTemper(name) {
   if (!(name in WOLF_TEMPERS)) return wolfTemper.name;
   wolfTemper.name = name;
   SPECIES.wolf.predator = WOLF_TEMPERS[name];
+  SPECIES.bear.predator = BEAR_TEMPERS[name];
   if (typeof localStorage !== 'undefined') localStorage.setItem('lr.wolves', name);
   return name;
 }
@@ -132,13 +142,25 @@ SPECIES.wolf = {
   predator: WOLF_TEMPERS[wolfTemper.name],
 };
 
+// The mountain bear: a solitary bulk of shoulder and hump, slower than wolves at
+// a walk but shockingly fast in the charge. Usually alone, sometimes a mother
+// and grown cub.
+SPECIES.bear = {
+  geo: () => buildBody({ body: [0.85, 0.9, 1.55], head: [0.42, 0.44, 0.52], legs: 0.52, tail: 0.1, colour: 0x5b4632, dark: 0x392c1f }),
+  speed: 7.2, flee: 0, calm: 5, herd: [1, 2], wander: 10,
+  predator: BEAR_TEMPERS[wolfTemper.name],
+};
+
+// Species know their own names, so warnings and strikes can speak plainly.
+for (const k in SPECIES) SPECIES[k].id = k;
+
 // Which species live where, with herd-site density per km of road.
 const FAUNA = {
   verdant: [['goat', 3], ['sheep', 3], ['deer', 1]],
   duskwood: [['elk', 2], ['deer', 2], ['fox', 1], ['wolf', 1]],
   emberfall: [['fox', 2]],
   whisper: [['monkey', 3], ['tapir', 1]],
-  frostveil: [['goat', 2], ['wolf', 1]],
+  frostveil: [['goat', 2], ['wolf', 1], ['bear', 0.5]],
   marsh: [['heron', 3], ['deer', 1]],
   ashen: [],
 };
@@ -415,7 +437,7 @@ export class Animals {
         const p = spec.predator;
         if (d > p.notice) { a.state = 'graze'; a.moving = false; continue; }
         anyNear = true;
-        if (!herd.warned) { herd.warned = true; herd.grace = p.grace; this.onStalk?.(a); }
+        if (!herd.warned) { herd.warned = true; herd.grace = p.grace; this.onStalk?.(a, spec); }
         a.yaw = Math.atan2(dx / (d || 1), dz / (d || 1));
         // During the grace window the pack only shadows you - back away past the
         // notice radius and nothing ever comes of it.
@@ -432,7 +454,7 @@ export class Animals {
           a.attackT = 1.0;
           herd.cool = p.cooldown;
           herd.warned = false;
-          this.onStrike?.(a);
+          this.onStrike?.(a, spec);
           break;              // one strike stands the whole pack down - same frame
         }
       }

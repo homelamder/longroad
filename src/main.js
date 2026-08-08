@@ -119,7 +119,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyV' && !e.repeat) {
     const order = Object.keys(WOLF_TEMPERS);
     const next = order[(order.indexOf(wolfTemper.name) + 1) % order.length];
-    hud.note(`wolves: ${setWolfTemper(next)}`, 3);
+    hud.note(`predators: ${setWolfTemper(next)}`, 3);
   }
 });
 const post = new Post(renderer, scene, camera, QUALITY);
@@ -143,11 +143,16 @@ const tasks = new TaskManager(
 const ending = new Ending({ hud, sky, weather, fuel });
 const audio = new Audio();
 const secrets = new Secrets(scene, { sky, weather, hud, audio });
-animals.onStalk = () => { hud.note('eyes in the treeline…', 4); audio.growl(0.5); };
-animals.onStrike = (a) => {
+animals.onStalk = (a, spec) => {
+  hud.note(spec?.id === 'bear' ? 'something big is watching…' : 'eyes in the treeline…', 4);
+  audio.growl(spec?.id === 'bear' ? 0.8 : 0.5);
+};
+animals.onStrike = (a, spec) => {
   foot.stagger(a.x, a.z);
-  hud.note('the wolf got you — the pack stands off, for now', 5);
-  audio.growl(1);
+  hud.note(spec?.id === 'bear'
+    ? 'the bear swatted you away — give it room'
+    : 'the wolf got you — the pack stands off, for now', 5);
+  audio.growl(spec?.id === 'bear' ? 1.4 : 1);
 };
 const save = new Save({ car, fuel, sky, stations, ending });
 const resumed = save.restore();

@@ -105,3 +105,29 @@ console.log('animals ok — herds deterministic, flee/calm behave, road stays cl
   an.release(wolves);
   console.log('hunt ok — stalk, one strike, cooldown, cars ignored');
 }
+
+// --- the bear ---------------------------------------------------------------
+// Solitary, territorial, same contract: warn, one strike, long cooldown, and
+// total indifference to cars.
+{
+  setWolfTemper('calm');
+  const bears = an.spawnAt('bear', 900, 9500, 1);
+  let strikes = 0, warns = 0, warnSpec = null;
+  an.onStrike = () => strikes++;
+  an.onStalk = (a, spec) => { warns++; warnSpec = spec?.id; };
+  const walker = { x: 900, z: 9522 };
+  for (let i = 0; i < 60 * 40; i++) {
+    an.update(1 / 60, walker, 0, true);
+    if (strikes > 0) break;
+  }
+  assert.equal(warnSpec, 'bear', 'warning did not name the bear');
+  assert.ok(warns >= 1 && strikes === 1, `bear: ${warns} warns, ${strikes} strikes`);
+  assert.ok(bears.cool > 60, `bear cooldown too short (${bears.cool})`);
+  let carStrikes = 0;
+  bears.cool = 0;
+  an.onStrike = () => carStrikes++;
+  for (let i = 0; i < 60 * 8; i++) an.update(1 / 60, walker, 0, false);
+  assert.equal(carStrikes, 0, 'bear attacked a car');
+  an.release(bears);
+  console.log('bear hunt ok — warned by name, one swat, long cooldown, cars ignored');
+}
