@@ -38,6 +38,9 @@ export function addHeadlights(mesh, spec) {
 // can never drift out of step through a shared mutable object.
 export function poseCar(mesh, car) {
   mesh.position.copy(car.pos);
+  // The physics origin rides `rideHeight` above the ground; the mesh's wheels have
+  // their contact patch at local y = 0. Without this drop the whole car hovers.
+  mesh.position.y -= car.spec.rideHeight - 0.02;
   mesh.rotation.set(0, car.yaw, 0, 'YXZ');
   mesh.rotateX(-car.pitch);
   mesh.rotateZ(-car.roll);

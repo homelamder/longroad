@@ -110,6 +110,7 @@ addEventListener('keydown', (e) => {
 });
 const post = new Post(renderer, scene, camera, QUALITY);
 controls.onCamera = () => { if (tasks.mode === 'drive') chase.cycle(); };
+controls.onLook = (dx, dy) => chase.look(dx, dy);
 controls.onRecover = () => { if (tasks.mode === 'drive') { car.recover(); chase.snap(car); } };
 
 // --- the loop: fuel, stations, tasks ---------------------------------------
@@ -266,7 +267,7 @@ function frame(now) {
     while (acc >= STEP && steps < 6) { car.update(STEP, input); acc -= STEP; steps++; }
     car.braking = input.brake > 0.05;
   } else {
-    foot.update(dt, input);
+    foot.update(dt, input, chase.orbYaw);
   }
   gameLogic(dt, input);
 

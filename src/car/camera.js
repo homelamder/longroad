@@ -16,9 +16,19 @@ export class ChaseCamera {
     this._f = new THREE.Vector3();
     this.ready = false;
     this.t = 0;              // shake clock
+    this.orbYaw = null;      // mouse orbit, foot mode; null = follow behind
+    this.orbPitch = 0.32;
     this.prevSpeed = 0;      // for accel-based dive/squat
     this.dive = 0;
     this.lean = 0;
+  }
+
+  // Mouse-look input: on foot the camera orbits the walker freely.
+  look(dx, dy) {
+    if (this.mode !== 'foot') return;
+    if (this.orbYaw === null) this.orbYaw = Math.atan2(this.camera.position.x - this.look.x, this.camera.position.z - this.look.z);
+    this.orbYaw -= dx * 0.0042;
+    this.orbPitch = Math.min(1.15, Math.max(-0.25, this.orbPitch + dy * 0.003));
   }
 
   cycle() {
@@ -34,6 +44,26 @@ export class ChaseCamera {
 
     let back, up, ahead, stiff;
     if (this.mode === 'foot') { back = 4.4; up = 2.1; ahead = 5.5; stiff = 7; }
+    if (this.mode === 'foot' && this.orbYaw !== null) {
+      // Free orbit: position from yaw/pitch around the walker, no lag on the aim.
+      const r = 4.6;
+      const cy = Math.cos(this.orbPitch), sy = Math.sin(this.orbPitch);
+      this._want.set(
+        car.pos.x - Math.sin(this.orbYaw) * r * cy,
+        car.pos.y + 1.2 + r * sy,
+        car.pos.z - Math.cos(this.orbYaw) * r * cy,
+      );
+      const floor2 = elevation(this._want.x, this._want.z) + 0.5;
+      if (this._want.y < floor2) this._want.y = floor2;
+      this._wantLook.set(car.pos.x, car.pos.y + 1.35, car.pos.z);
+      const k2 = 1 - Math.exp(-14 * dt);
+      this.pos.lerp(this._want, k2);
+      this.look.lerp(this._wantLook, 1 - Math.exp(-20 * dt));
+      this.camera.position.copy(this.pos);
+      this.camera.lookAt(this.look);
+      this.prevSpeed = 0;
+      return;
+    }
     else if (this.mode === 'dash') {
       // Driver's eye: inside the cabin, rigid to the car. Eye height per class.
       const low = car.spec && (car.spec.class === 'supercar' || car.spec.class === 'muscle');

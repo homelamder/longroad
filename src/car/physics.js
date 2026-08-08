@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { elevation } from '../world/terrain.js';
 import { nearest, corridorWeight, pointAt } from '../world/road.js';
+import { obstaclesNear } from '../world/scatter.js';
 import { clamp, lerp } from '../world/rng.js';
 
 // Arcade, not simulation. The car goes where it points; how much it refuses to is
@@ -188,6 +189,32 @@ export class Car {
     }
 
     this.pos.addScaledVector(this.vel, dt);
+
+    // Trees and boulders are solid. Circle-vs-circle in the ground plane: push out,
+    // and the head-on component of the hit becomes lost speed. A glancing blow
+    // scrubs a little and shoves the nose aside; a square hit is a wall.
+    if (!this.airborne) {
+      const obs = obstaclesNear(this.pos.x, this.pos.z, this._obs || (this._obs = []));
+      if (obs.length) {
+        const R = 1.05;
+        const f = this.forward();
+        for (const o of obs) {
+          const dx = this.pos.x - o.x, dz = this.pos.z - o.z;
+          const rr = o.r + R;
+          const d2 = dx * dx + dz * dz;
+          if (d2 >= rr * rr) continue;
+          const d = Math.sqrt(d2) || 0.001;
+          const push = rr - d;
+          this.pos.x += (dx / d) * push;
+          this.pos.z += (dz / d) * push;
+          const head = Math.max(0, -((dx * f.x + dz * f.z) / d));
+          this.impact = Math.max(this.impact || 0, head * Math.abs(this.speed));
+          this.speed *= 1 - head * 0.88;
+          this.lateral *= 0.55;
+        }
+      }
+    }
+
     this.wheelSpin += (this.speed / s.wheelR) * dt;
 
     this.groundNormal.set(

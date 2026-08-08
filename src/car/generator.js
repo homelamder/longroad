@@ -94,6 +94,18 @@ function extrudeProfile(points, L, W, floor, { bevel = 0.09, curveSegments = 6 }
   // car's forward axis is +Z, so rotate the whole solid into car space once here —
   // nose (t = 0) lands at +Z, width across X.
   geo.rotateY(Math.PI / 2);
+
+  // Automotive surfacing: real bodies are not slabs. Plan-view taper narrows the
+  // nose and tail; tumblehome leans the sides inward above the beltline. Both are
+  // baked into the vertices so the smoothed normals flow around the curves.
+  const pa = geo.attributes.position;
+  for (let i = 0; i < pa.count; i++) {
+    const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i);
+    const t = Math.min(1, Math.max(0, (L / 2 - z) / L));
+    let k = 0.82 + 0.18 * Math.pow(Math.sin(Math.PI * t), 0.55);
+    if (y > 0.92) k *= 1 - Math.min(0.22, (y - 0.92) * 0.2);
+    pa.setX(i, x * k);
+  }
   // Crease-aware smoothing: hull faces flow into each other, edges stay edges.
   return toCreasedNormals(geo, Math.PI / 5);
 }
@@ -257,6 +269,70 @@ export function buildCarBody(spec) {
     }
   }
   g.userData.wheels = wheels;
+
+  // Soft contact shadows: a radial-gradient blob under the body and each wheel.
+  // Cheaper than any SSAO reach and the strongest it-is-ON-the-ground cue.
+  const blobC = document.createElement('canvas');
+  blobC.width = blobC.height = 128;
+  const bctx = blobC.getContext('2d');
+  const grad = bctx.createRadialGradient(64, 64, 8, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(0,0,0,0.62)');
+  grad.addColorStop(0.7, 'rgba(0,0,0,0.28)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  bctx.fillStyle = grad;
+  bctx.fillRect(0, 0, 128, 128);
+  const blobMat = new THREE.MeshBasicMaterial({
+    map: new THREE.CanvasTexture(blobC), transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -4,
+  });
+  const shadows = new THREE.Group();
+  const bodyBlob = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.5, L * 1.15), blobMat);
+  bodyBlob.rotation.x = -Math.PI / 2;
+  bodyBlob.position.y = 0.045;
+  shadows.add(bodyBlob);
+  for (const fz of [hb, -hb]) {
+    for (const sx of [-1, 1]) {
+      const wb = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.15), blobMat);
+      wb.rotation.x = -Math.PI / 2;
+      wb.position.set(sx * (ht + 0.07), 0.06, fz);
+      shadows.add(wb);
+    }
+  }
+  g.add(shadows);
+  g.userData.contactShadow = blobMat;
+
+  // Seats and a cabin floor, always present: through the tinted glass an empty
+  // shell reads instantly as a toy. Two seats and headrests fix it from outside.
+  const seatM = new THREE.MeshStandardMaterial({ color: 0x1e2023, roughness: 0.9 });
+  const cabMidT = (CABIN[cls][0] + CABIN[cls][1]) / 2;
+  const seatZ = L / 2 - cabMidT * L;
+  for (const sxs of [-0.22, 0.22]) {
+    const seat = new THREE.Mesh(new RoundedBoxGeometry(0.46, 0.5, 0.45, 2, 0.06), seatM);
+    seat.position.set(sxs * W, floor + 0.42, seatZ - 0.1);
+    g.add(seat);
+    const back = new THREE.Mesh(new RoundedBoxGeometry(0.44, 0.55, 0.14, 2, 0.05), seatM);
+    back.position.set(sxs * W, floor + 0.78, seatZ - 0.32);
+    back.rotation.x = 0.14;
+    g.add(back);
+  }
+  const cabFloor = new THREE.Mesh(new THREE.BoxGeometry(W * 0.84, 0.05, L * 0.4), seatM);
+  cabFloor.position.set(0, floor + 0.12, seatZ);
+  g.add(cabFloor);
+
+  // Rocker panels ground the sides; exhausts finish the tail.
+  const rockerM = DARK();
+  for (const sxr of [-1, 1]) {
+    const rocker = new THREE.Mesh(new RoundedBoxGeometry(0.09, 0.14, L * 0.44, 2, 0.03), rockerM);
+    rocker.position.set(sxr * (W / 2 - 0.1), floor + 0.04, 0);
+    g.add(rocker);
+  }
+  const pipeGeo = new THREE.CylinderGeometry(0.05, 0.055, 0.22, 12);
+  pipeGeo.rotateX(Math.PI / 2);
+  for (const sxp of (cls === 'supercar' || cls === 'muscle' ? [-0.14, 0.14] : [-0.3])) {
+    const pipe = new THREE.Mesh(pipeGeo, CHROME());
+    pipe.position.set(sxp * W, floor + 0.08, -L / 2 - 0.06);
+    g.add(pipe);
+  }
 
   // Interior for the dashboard camera: dash top, instrument brow, steering wheel
   // on a column, A-pillar hints. Hidden until the camera is inside; the hull's

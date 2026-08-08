@@ -11,6 +11,16 @@ export class Controls {
     this.tilt = false;
     this.tiltValue = 0;
     this.onCamera = null;
+    this.onLook = null;
+
+    // Hold-and-drag mouse look. Deltas stream to whoever registered onLook; no
+    // pointer lock, so the cursor never gets trapped.
+    let dragging = false;
+    addEventListener('mousedown', (e) => { if (e.button === 0) dragging = true; });
+    addEventListener('mouseup', () => { dragging = false; });
+    addEventListener('mousemove', (e) => {
+      if (dragging && this.onLook) this.onLook(e.movementX, e.movementY);
+    });
     this.onRecover = null;
     this.onAction = null;
     this.isTouch = matchMedia('(pointer: coarse)').matches;

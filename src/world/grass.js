@@ -27,11 +27,42 @@ const HEIGHT = {
 
 // Two crossed tapered quads. A single quad is half the triangles but goes invisible
 // edge-on, and with the camera swinging behind a car that reads as grass flickering.
+// A painted cluster of curved blades: dark rooted, light tipped. On alphaTest
+// cards this reads as real grass at a fraction of the cost of geometry blades.
+export function bladeTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 256;
+  const g = c.getContext('2d');
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let b = 0; b < 11; b++) {
+    const rootX = 12 + rnd() * 104;
+    const lean = (rnd() - 0.5) * 60;
+    const h = 150 + rnd() * 100;
+    const w = 5 + rnd() * 7;
+    const grad = g.createLinearGradient(0, 256, 0, 256 - h);
+    grad.addColorStop(0, '#2a3d14');
+    grad.addColorStop(0.55, '#4a6420');
+    grad.addColorStop(1, '#8aa348');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.moveTo(rootX - w / 2, 256);
+    g.quadraticCurveTo(rootX - w / 2 + lean * 0.4, 256 - h * 0.6, rootX + lean, 256 - h);
+    g.quadraticCurveTo(rootX + w / 2 + lean * 0.4, 256 - h * 0.6, rootX + w / 2, 256);
+    g.closePath();
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 function tuftGeometry() {
   const pos = [], nor = [], uv = [], idx = [];
   const quad = (ax) => {
     const base = pos.length / 3;
-    const hw = 0.11, tw = 0.02, h = 1;
+    const hw = 0.26, tw = 0.22, h = 1;
     const cx = Math.cos(ax), sx = Math.sin(ax);
     const p = (x, y) => pos.push(x * cx, y, x * sx);
     p(-hw, 0); p(hw, 0); p(tw, h); p(-tw, h);
@@ -63,6 +94,9 @@ export class Grass {
       // for one that does not exist leaves the shader reading an unbound attribute —
       // which is zero, so every blade renders pure black. instanceColor alone drives
       // the colour here, and three applies it whether or not vertex colours are on.
+      // The painted blade cluster does the realism; alphaTest keeps it unsorted.
+      map: bladeTexture(),
+      alphaTest: 0.42,
       roughness: 0.94, metalness: 0,
       side: THREE.DoubleSide,
     });
@@ -157,7 +191,7 @@ export class Grass {
         for (let k = 0; k < 16; k++) rows.push(m.elements[k]);
 
         mixColor(clamp(z, 0, JOURNEY), 'grass', this._c);
-        const shade = 0.5 + h3 * 0.42;   // darker: blades sit IN the sward, not on it
+        const shade = 0.78 + h3 * 0.3;   // painted cards carry their own depth now   // darker: blades sit IN the sward, not on it
         rows.push(this._c.r * shade, this._c.g * shade, this._c.b * shade);
       }
     }

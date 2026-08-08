@@ -192,6 +192,47 @@ function placeChunk(cx, cz, density) {
   return out;
 }
 
+// Species that stop a car, as trunk/body circle radius per unit of scale.
+// Bushes, reeds and ferns stay soft - driving through undergrowth is part of the
+// fun; driving through an oak is not.
+export const COLLIDERS = {
+  pineA: 0.34, pineB: 0.3, oakA: 0.44, ashA: 0.36, aspenA: 0.3,
+  pineFar: 0.34, oakFar: 0.44,
+  boulder: 0.95, boulderB: 0.65, stump: 0.38, deadTrunk: 0.36, quiver: 0.32,
+};
+
+// The physics needs the live Scatter's placement cache without importing the
+// instance, so the instance registers itself here.
+export const activeScatter = { current: null };
+
+// Solid obstacles within ~20 m of (x, z). Reuses `out` to stay allocation-free in
+// the physics step. Returns [] before the world finishes booting.
+export function obstaclesNear(x, z, out = []) {
+  out.length = 0;
+  const sc = activeScatter.current;
+  if (!sc) return out;
+  const ccx = Math.floor(x / CHUNK), ccz = Math.floor(z / CHUNK);
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const data = sc.cache.get(sc.key(ccx + dx, ccz + dz));
+      if (!data) continue;
+      for (const id in data) {
+        const cr = COLLIDERS[id];
+        if (!cr) continue;
+        const rows = data[id];
+        for (let i = 0; i < rows.length; i += STRIDE) {
+          const ox = rows[i], oz = rows[i + 2];
+          const ddx = ox - x, ddz = oz - z;
+          if (ddx * ddx + ddz * ddz < 400) {
+            out.push({ x: ox, z: oz, r: cr * rows[i + 3] });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export class Scatter {
   constructor({ quality, veg }) {
     this.q = quality;
@@ -240,6 +281,7 @@ export class Scatter {
     this._v = new THREE.Vector3();
     this._s = new THREE.Vector3();
     this._up = new THREE.Vector3(0, 1, 0);
+    activeScatter.current = this;
   }
 
   key(cx, cz) { return (cx + 4096) * 8192 + (cz + 4096); }
