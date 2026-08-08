@@ -100,6 +100,7 @@ export class Car {
     const brake = clamp(input.brake || 0, 0, 1);
     const handbrake = !!input.handbrake;
 
+    this.throttleIn = throttle;
     const ground = this.probeWheels();
     const rest = ground + s.rideHeight;
 

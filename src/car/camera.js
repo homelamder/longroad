@@ -15,6 +15,10 @@ export class ChaseCamera {
     this._wantLook = new THREE.Vector3();
     this._f = new THREE.Vector3();
     this.ready = false;
+    this.t = 0;              // shake clock
+    this.prevSpeed = 0;      // for accel-based dive/squat
+    this.dive = 0;
+    this.lean = 0;
   }
 
   cycle() {
@@ -66,6 +70,30 @@ export class ChaseCamera {
 
     this.camera.position.copy(this.pos);
     this.camera.lookAt(this.look);
+
+    // Cockpit feel. Strongest at the wheel, a whisper in chase, absent in far.
+    this.t += dt;
+    const speedAbs = Math.abs(car.speed);
+    const accel = dt > 0 ? (speedAbs - this.prevSpeed) / dt : 0;
+    this.prevSpeed = speedAbs;
+    if (this.mode === 'dash' || this.mode === 'hood' || this.mode === 'chase') {
+      const inCab = this.mode !== 'chase';
+      const sp = clamp(speedAbs / 38, 0, 1);
+      // Road texture: high-frequency micro-jitter, rougher off the tarmac.
+      const rough = car.onRoad ? 0.5 : 1.6;
+      const amp = (inCab ? 0.0035 : 0.0012) * rough * Math.pow(sp, 1.4)
+        + (car.airborne ? 0.004 : 0);
+      const nx = Math.sin(this.t * 37.7) + 0.6 * Math.sin(this.t * 59.3 + 1.3);
+      const ny = Math.sin(this.t * 43.1 + 0.7) + 0.6 * Math.sin(this.t * 67.9);
+      // Head-lean: slide and steering tip the head into the corner; braking dives.
+      const targetLean = inCab
+        ? clamp(-car.lateral * 0.016 - car.steerAngle * sp * 0.5, -0.1, 0.1) : 0;
+      this.lean = lerp(this.lean, targetLean, Math.min(1, dt * 5));
+      const targetDive = inCab ? clamp(-accel * 0.004, -0.03, 0.045) : 0;
+      this.dive = lerp(this.dive, targetDive, Math.min(1, dt * 4));
+      this.camera.rotateZ(this.lean + nx * amp);
+      this.camera.rotateX(this.dive + ny * amp * 0.7);
+    }
 
     const wantFov = this.mode === 'foot' ? this.baseFov
       : this.baseFov + t * 13 + (car.airborne ? 3 : 0);

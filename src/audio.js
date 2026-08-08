@@ -10,6 +10,15 @@ import { asset } from './asset.js';
 // so the world is never silent, even offline.
 const BEDS = ['birds', 'crickets', 'stream', 'windsoft', 'windstrong', 'rain'];
 
+// Engine character per car class: playback-rate multiplier and lowpass colour.
+// One recorded pair serves every car; pitch and filtering do the rest.
+const ENGINE_FLAVOUR = {
+  supercar: { rate: 1.4, lp: 5200 }, rally: { rate: 1.2, lp: 4200 },
+  muscle: { rate: 0.78, lp: 2600 }, pickup: { rate: 0.82, lp: 2200 },
+  offroader: { rate: 0.85, lp: 2400 }, van: { rate: 0.8, lp: 2000 },
+  suv: { rate: 0.95, lp: 2800 }, hatch: { rate: 1.05, lp: 3200 },
+};
+
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -113,6 +122,32 @@ export class Audio {
         })
         .catch(() => { /* fall back to synthesis for this layer */ });
     }
+
+    // Recorded engine: idle and high loops crossfaded and pitched by revs.
+    this.engine = null;
+    Promise.all(['engine_low', 'engine_high'].map((n) =>
+      fetch(asset(`/sfx/${n}.ogg`))
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((ab) => ctx.decodeAudioData(ab)),
+    )).then(([low, high]) => {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 3000;
+      const master = ctx.createGain();
+      master.gain.value = 0;
+      lp.connect(master);
+      master.connect(this.master);
+      const mk = (buf) => {
+        const src = ctx.createBufferSource();
+        src.buffer = buf; src.loop = true;
+        const g = ctx.createGain(); g.gain.value = 0;
+        src.connect(g); g.connect(lp); src.start();
+        return { src, g };
+      };
+      this.engine = { low: mk(low), high: mk(high), lp, master };
+      // The recording replaces the synthesized saw stack entirely.
+      this.engineGain.gain.value = 0;
+    }).catch(() => { /* saw synth remains */ });
 
     this.ready = true;
   }
@@ -224,14 +259,33 @@ export class Audio {
       }
     }
 
-    // Engine pitch from speed, load from throttle-ish accel; idles at a putter.
-    const revs = driving ? 55 + speed * 3.6 : 0;
-    const target = driving ? clamp(0.06 + speed / 46 * 0.14, 0.06, 0.2) : 0;
-    for (const o of this.engOsc) {
-      o.frequency.value = lerp(o.frequency.value, Math.max(40, revs), Math.min(1, dt * 6));
+    if (this.engine) {
+      // revs 0..1: road speed against this car's top, plus a blip of throttle so
+      // flooring it is audible before the speed arrives.
+      const spec = car.spec || {};
+      const top = spec.topSpeed || 40;
+      const fl = ENGINE_FLAVOUR[spec.class] || { rate: 1.0, lp: 3000 };
+      const revs = clamp(speed / top, 0, 1) * 0.85 + (car.throttleIn || 0) * 0.15;
+      const rate = fl.rate * (0.62 + revs * 1.15);
+      const k = Math.min(1, dt * 8);
+      this.engine.low.src.playbackRate.value = lerp(this.engine.low.src.playbackRate.value, rate, k);
+      this.engine.high.src.playbackRate.value = lerp(this.engine.high.src.playbackRate.value, rate * 1.05, k);
+      const x = clamp((revs - 0.18) / 0.5, 0, 1);
+      this.engine.low.g.gain.value = (1 - x) * 0.9 + 0.1;
+      this.engine.high.g.gain.value = x;
+      this.engine.lp.frequency.value = fl.lp * (0.5 + revs * 0.9);
+      const target = driving ? 0.1 + revs * 0.16 : 0;
+      this.engine.master.gain.value = lerp(this.engine.master.gain.value, target, Math.min(1, dt * 4));
+    } else {
+      // Fallback: the synthesized saw stack, exactly as before.
+      const revs = driving ? 55 + speed * 3.6 : 0;
+      const target = driving ? clamp(0.06 + speed / 46 * 0.14, 0.06, 0.2) : 0;
+      for (const o of this.engOsc) {
+        o.frequency.value = lerp(o.frequency.value, Math.max(40, revs), Math.min(1, dt * 6));
+      }
+      this.engFilter.frequency.value = 280 + speed * 12;
+      this.engineGain.gain.value = lerp(this.engineGain.gain.value, target, Math.min(1, dt * 4));
     }
-    this.engFilter.frequency.value = 280 + speed * 12;
-    this.engineGain.gain.value = lerp(this.engineGain.gain.value, target, Math.min(1, dt * 4));
 
     this.windGain.gain.value = lerp(this.windGain.gain.value,
       clamp((speed - 8) / 38, 0, 1) * 0.16 + weather.wind * 0.05, Math.min(1, dt * 3));

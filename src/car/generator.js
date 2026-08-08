@@ -303,6 +303,20 @@ export function buildCarBody(spec) {
     pillar.rotation.x = -0.45;
     interior.add(pillar);
   }
+  // The hull's own bonnet backface-culls from the driver's seat, which would leave
+  // lamp housings and the bullbar floating in space — so the interior carries its
+  // own bonnet panel, pitched from windshield base down to the nose line.
+  const noseY = PROFILES[cls][0][1];
+  const windY = dashTop + 0.06;
+  const bl = (L / 2) - dashZ - 0.06;
+  const bonnet = new THREE.Mesh(
+    new RoundedBoxGeometry(W * 0.96, 0.06, bl, 2, 0.03),
+    paint,
+  );
+  bonnet.position.set(0, (windY + noseY) / 2 + 0.03, dashZ + bl / 2 + 0.03);
+  bonnet.rotation.x = -Math.atan2(windY - noseY, bl);   // nose end pitches DOWN
+  interior.add(bonnet);
+
   interior.visible = false;
   g.add(interior);
   g.userData.interior = interior;
