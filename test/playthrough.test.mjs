@@ -99,6 +99,7 @@ let simSeconds = 0;
 let stops = 0;
 const tasksSeen = new Set();
 let taskSteps = 0;
+let brainFord = null;
 let target = null;                  // station currently being pulled into
 
 const MAX_SIM = 9000;               // 150 sim-minutes: the brain sometimes rolls several slow tasks
@@ -121,7 +122,16 @@ while (car.along < ROAD_LENGTH - 60 && simSeconds < MAX_SIM) {
     taskSteps++;
     const t = interact.current;
     const task = mgr.active.task;
-    if (task.goal && mgr.mode === 'drive') {
+    if (task.id === 'ford-river' && mgr.mode === 'drive') {
+      // MUST come before the generic goal branch: the ford sets a goal too, and
+      // the generic 22 m/s charge trips the too-fast punt back to the bank in an
+      // endless loop. Wade at 3 m/s (11 km/h), under the 15 km/h flood limit.
+      if (brainFord === null || brainFord < car.along - 50) brainFord = car.along;
+      brainFord += 3.0 * DT;
+      const p = pointAt(brainFord);
+      car.pos.set(p.x, p.y + 0.6, p.z);
+      car.speed = 3.0;
+    } else if (task.goal && mgr.mode === 'drive') {
       const d = Math.hypot(car.pos.x - task.goal.x, car.pos.z - task.goal.z);
       // The runaway sheep panics above ~9 m/s when close: this brain creeps in.
       const v = task.id === 'runaway' ? 4.5 : 22;
@@ -132,11 +142,6 @@ while (car.along < ROAD_LENGTH - 60 && simSeconds < MAX_SIM) {
       } else {
         car.speed = 0;
       }
-    } else if (task.id === 'ford-river' && mgr.mode === 'drive') {
-      const along = car.along + 3.0 * DT;
-      const p = pointAt(along);
-      car.pos.set(p.x, p.y + 0.6, p.z);
-      car.speed = 3.0;
     } else if (task.id === 'ash-shelter' && mgr.mode === 'drive') {
       const d = Math.hypot(car.pos.x - task.spot.x, car.pos.z - task.spot.z);
       if (d > 4) {
